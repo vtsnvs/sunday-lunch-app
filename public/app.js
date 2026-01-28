@@ -14,7 +14,7 @@ socket.on('data_update', (data) => {
     // Refresh user list logic
     if (data.type === 'users') {
         if (isAdmin) {
-            loadAdminUserList(); // Now this function is visible!
+            loadAdminUserList(); 
         } else if (!currentUser) {
             loadUserList();
         }
@@ -29,7 +29,12 @@ socket.on('status_change', (data) => {
 
 // --- COMMON: UI HELPERS ---
 function showMessage(msg, color) {
-    const el = document.getElementById(isAdmin ? 'admin-message' : 'message');
+    // Determine which box to use based on context
+    let elId = 'message';
+    if (isAdmin) elId = 'admin-message';
+    else if (!currentUser) elId = 'login-message'; // Show login errors in the login box
+
+    const el = document.getElementById(elId);
     if(el) {
         el.textContent = msg;
         el.style.color = color || '#333';
@@ -37,32 +42,61 @@ function showMessage(msg, color) {
     }
 }
 
-// --- SHARED FUNCTIONS (Available to both Admin and Client) ---
+// --- SHARED FUNCTIONS ---
 
+// NEW: Load users into the dropdown
 async function loadUserList() {
-    const res = await fetch(`/api/users?t=${Date.now()}`);
-    const users = await res.json();
-    const container = document.getElementById('user-list');
-    if(!container) return;
-    container.innerHTML = '';
+    const select = document.getElementById('user-select');
+    if(!select) return;
 
-    if (users.length === 0) {
-        container.innerHTML = '<p>No team members found. Ask Admin to add names!</p>';
-        return;
+    try {
+        const res = await fetch(`/api/users?t=${Date.now()}`);
+        const users = await res.json();
+        
+        // Save current selection in case of refresh
+        const currentSelection = select.value;
+
+        // Reset dropdown
+        select.innerHTML = '<option value="" disabled selected>Select your name...</option>';
+
+        if (users.length === 0) {
+            const opt = document.createElement('option');
+            opt.textContent = "No names found (Ask Admin)";
+            opt.disabled = true;
+            select.appendChild(opt);
+            return;
+        }
+
+        users.forEach(u => {
+            const option = document.createElement('option');
+            option.value = u.name;
+            option.textContent = u.name;
+            select.appendChild(option);
+        });
+
+        // Restore selection if valid
+        if(currentSelection) select.value = currentSelection;
+
+    } catch(e) {
+        console.error("Failed to load users", e);
     }
-
-    users.forEach(u => {
-        const btn = document.createElement('button');
-        btn.className = 'food-card'; 
-        btn.textContent = u.name;
-        btn.style.width = '100%';
-        btn.style.cursor = 'pointer';
-        btn.onclick = () => selectUser(u.name);
-        container.appendChild(btn);
-    });
 }
 
-// Moved this to global scope so Socket.io can call it
+// NEW: Login Button Logic
+const loginBtn = document.getElementById('login-btn');
+if (loginBtn) {
+    loginBtn.onclick = () => {
+        const select = document.getElementById('user-select');
+        const name = select.value;
+        if (name) {
+            selectUser(name);
+        } else {
+            showMessage("Please select your name first!", "var(--danger)");
+        }
+    };
+}
+
+// Admin User List (No changes here, but kept for completeness)
 async function loadAdminUserList() {
     const res = await fetch(`/api/users?t=${Date.now()}`);
     const users = await res.json();
@@ -214,11 +248,9 @@ if (isAdmin) {
             body: JSON.stringify({name})
         });
         input.value = '';
-        // Manual update for instant feedback
         loadAdminUserList();
     };
     
-    // Global function for the remove button in the HTML string
     window.removeUser = async (name) => {
         if(!confirm(`Remove ${name} from team?`)) return;
         await fetch('/api/admin/users/delete', {
@@ -226,7 +258,6 @@ if (isAdmin) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({name})
         });
-        // Manual update for instant feedback
         loadAdminUserList();
     };
 
@@ -255,7 +286,6 @@ if (isAdmin) {
         showMessage('System Reset!', 'var(--danger)');
     };
 
-    // Initial Loads
     loadVoteCounts();
     loadFoodItems();
     loadAdminUserList();

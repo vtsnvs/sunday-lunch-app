@@ -1,14 +1,15 @@
 require('dotenv').config();
 const express = require('express');
-const http = require('http'); // New
-const { Server } = require("socket.io"); // New
+const http = require('http');
+const { Server } = require("socket.io");
 const { Pool } = require('pg');
 const bodyParser = require('body-parser');
 const cron = require('node-cron');
+const path = require('path'); // NEW: Required for sending files
 
 const app = express();
-const server = http.createServer(app); // Wrap express in HTTP server
-const io = new Server(server); // Initialize Socket.io
+const server = http.createServer(app);
+const io = new Server(server);
 
 const port = process.env.PORT || 3000;
 
@@ -19,6 +20,11 @@ app.use(express.static('public'));
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     next();
+});
+
+// --- NEW ROUTE: PRETTY URL FOR ADMIN ---
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 const pool = new Pool({
@@ -43,7 +49,7 @@ io.on('connection', (socket) => {
     console.log('A user connected');
 });
 
-// --- API ROUTES (Now with Real-time triggers) ---
+// --- API ROUTES ---
 
 app.get('/api/users', async (req, res) => {
     try {
@@ -55,7 +61,7 @@ app.get('/api/users', async (req, res) => {
 app.post('/api/admin/users', async (req, res) => {
     try {
         await pool.query("INSERT INTO allowed_users (name) VALUES ($1) ON CONFLICT DO NOTHING", [req.body.name]);
-        io.emit('data_update', { type: 'users' }); // Notify everyone
+        io.emit('data_update', { type: 'users' }); 
         res.json({ message: "User added" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -63,14 +69,13 @@ app.post('/api/admin/users', async (req, res) => {
 app.post('/api/admin/users/delete', async (req, res) => {
     try {
         await pool.query("DELETE FROM allowed_users WHERE name=$1", [req.body.name]);
-        io.emit('data_update', { type: 'users' }); // Notify everyone
+        io.emit('data_update', { type: 'users' }); 
         res.json({ message: "User removed" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/food', async (req, res) => {
     try {
-        // Keep list stable by sorting by ID
         const result = await pool.query("SELECT * FROM food_items ORDER BY id ASC");
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -119,7 +124,7 @@ app.post('/api/vote', async (req, res) => {
 
         await client.query('COMMIT');
         
-        io.emit('data_update', { type: 'votes' }); // Real-time trigger
+        io.emit('data_update', { type: 'votes' }); 
         res.json({ message: "Vote counted!" });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -132,7 +137,7 @@ app.post('/api/vote', async (req, res) => {
 app.post('/api/admin/add', async (req, res) => {
     try {
         const result = await pool.query("INSERT INTO food_items (name) VALUES ($1) RETURNING id", [req.body.name]);
-        io.emit('data_update', { type: 'menu' }); // Notify everyone
+        io.emit('data_update', { type: 'menu' }); 
         res.json({ message: "Food added", id: result.rows[0].id });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -140,7 +145,7 @@ app.post('/api/admin/add', async (req, res) => {
 app.post('/api/admin/remove', async (req, res) => {
     try {
         await pool.query("DELETE FROM food_items WHERE id=$1", [req.body.id]);
-        io.emit('data_update', { type: 'menu' }); // Notify everyone
+        io.emit('data_update', { type: 'menu' }); 
         res.json({ message: "Food removed" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -158,7 +163,7 @@ app.post('/api/admin/reset-votes', async (req, res) => {
         await pool.query("UPDATE food_items SET votes=0");
         await pool.query("DELETE FROM vote_logs");
         await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
-        io.emit('data_update', { type: 'reset' }); // Full reset trigger
+        io.emit('data_update', { type: 'reset' }); 
         res.json({ message: "New week started!" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -180,7 +185,6 @@ app.get('/api/admin/counts', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Automatic Reset
 cron.schedule('1 0 * * 1', async () => {
     try {
         await pool.query("UPDATE food_items SET votes=0");
@@ -190,5 +194,4 @@ cron.schedule('1 0 * * 1', async () => {
     } catch (err) { console.error("Reset failed:", err); }
 });
 
-// Use server.listen instead of app.listen
 server.listen(port, () => console.log(`Server running at http://localhost:${port}`));
