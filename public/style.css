@@ -207,6 +207,27 @@ button {
   min-height: 24px;
 }
 
+.btn-admin-link {
+  display: inline-block;
+  text-decoration: none;
+  color: #777;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 10px 20px;
+  border: 2px solid #eee;
+  border-radius: 50px;
+  transition: all 0.2s;
+  background-color: white;
+}
+
+.btn-admin-link:hover {
+  background-color: var(--secondary);
+  border-color: var(--secondary);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
 /* =========================================
    MOBILE OPTIMIZATION (Phones < 480px)
    ========================================= */
