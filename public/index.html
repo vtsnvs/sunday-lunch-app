@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sunday Lunch Voting</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>🍽️ Sunday Lunch</h1>
+
+    <div id="login-section">
+        <h2>Who are you?</h2>
+        <div id="user-list" class="food-grid"></div>
+        <p id="login-message" class="message-box"></p>
+    </div>
+
+    <div id="voting-section" style="display:none;">
+        <p>Welcome, <span id="current-user-name" style="font-weight:bold; color:var(--primary);"></span>!</p>
+        <p>What are we eating this week?</p>
+        
+        <div id="food-list" class="food-grid"></div>
+        
+        <button onclick="logout()" style="margin-top:20px; background:#ccc; font-size:0.8rem;">Change User</button>
+        <p id="message" class="message-box"></p>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

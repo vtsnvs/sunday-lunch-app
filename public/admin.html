@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lunch Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>👑 Chef's Table</h1>
+    
+    <div class="admin-controls" style="margin-top: 0; margin-bottom: 2rem;">
+        <h2>Manage Team</h2>
+        <div class="input-group">
+            <input type="text" id="new-user-name" placeholder="New team member name...">
+            <button id="add-user-btn" class="btn-add">Add Person</button>
+        </div>
+        <div id="user-list-admin" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;"></div>
+    </div>
+
+    <h2>Current Menu</h2>
+    <div class="input-group">
+        <input type="text" id="food-name" placeholder="Add food option...">
+        <button id="add-food-btn" class="btn-add">Add Food</button>
+    </div>
+    <div id="food-items" class="food-grid"></div>
+
+    <div class="admin-controls">
+        <h2>Control Panel</h2>
+        <div id="vote-counts" style="margin-bottom: 15px; text-align: left;"></div>
+        
+        <div class="danger-zone">
+            <button id="close-votes-btn" style="background:#555; color:white;">🔒 Close Voting</button>
+            <button id="reset-votes-btn" class="btn-danger">🔄 New Week (Reset Votes)</button>
+            <button id="reset-all-btn" class="btn-danger">🔥 Nuke Everything</button>
+        </div>
+        <p id="admin-message" class="message-box" style="color: var(--primary);"></p>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,238 @@
+/* public/style.css */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Fredoka+One&display=swap');
+
+/* --- GLOBAL RESET & BASE --- */
+* {
+  box-sizing: border-box; /* Crucial for responsive mobile layouts */
+}
+
+:root {
+  --primary: #ff8c00; /* Tasty Orange */
+  --secondary: #ffb74d;
+  --bg-color: #fff8e1; /* Creamy background */
+  --card-bg: #ffffff;
+  --text-color: #333;
+  --danger: #ff5252;
+  --success: #4caf50;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  margin: 0;
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.container {
+  width: 100%;
+  max-width: 600px; /* Perfect reading width for desktop */
+  text-align: center;
+}
+
+/* --- TYPOGRAPHY --- */
+h1 {
+  font-family: 'Fredoka One', cursive;
+  color: var(--primary);
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+  line-height: 1.2;
+}
+
+h2 {
+  color: var(--text-color);
+  margin-top: 2rem;
+  border-bottom: 2px solid var(--secondary);
+  display: inline-block;
+  padding-bottom: 5px;
+}
+
+/* --- INPUTS & ADMIN --- */
+.input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 2rem;
+  justify-content: center;
+}
+
+input[type="text"] {
+  padding: 12px 15px;
+  border: 2px solid var(--secondary);
+  border-radius: 25px;
+  font-size: 1rem;
+  outline: none;
+  width: 70%;
+  transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+  border-color: var(--primary);
+}
+
+.btn-add {
+  background-color: var(--success);
+  color: white;
+  white-space: nowrap; /* Prevents text from wrapping awkwardly */
+}
+
+.admin-controls {
+  margin-top: 3rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.danger-zone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+/* --- FOOD CARDS (GRID SYSTEM) --- */
+.food-grid {
+  display: grid;
+  /* Responsive grid: fits as many 200px+ cards as possible, else stacks */
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.food-card {
+  background: var(--card-bg);
+  border-radius: 15px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 140px; /* Uniform height look */
+}
+
+/* Hover effects only for devices with a mouse (prevents sticky hover on mobile) */
+@media (hover: hover) {
+  .food-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+  }
+}
+
+.food-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  word-break: break-word; /* Prevents long words breaking layout */
+}
+
+.vote-count {
+  font-size: 0.85rem;
+  color: #777;
+  background: #f0f0f0;
+  padding: 4px 10px;
+  border-radius: 20px;
+  margin-bottom: 1rem;
+}
+
+/* --- BUTTONS --- */
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 50px;
+  padding: 12px 24px; /* Larger touch target */
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  transition: all 0.2s;
+  font-size: 1rem;
+}
+
+.btn-vote {
+  background-color: var(--primary);
+  color: white;
+  width: 100%;
+}
+
+.btn-vote:active {
+  transform: scale(0.95); /* Click feedback */
+}
+
+.btn-remove {
+  background-color: #ffebee;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  padding: 6px 15px;
+  font-size: 0.8rem;
+}
+
+.btn-danger {
+  background-color: var(--danger);
+  color: white;
+  opacity: 0.9;
+}
+
+.message-box {
+  margin-top: 1rem;
+  font-weight: 600;
+  min-height: 24px;
+}
+
+/* --- HIGHLIGHT SELECTED --- */
+.selected-card {
+    border: 3px solid var(--success);
+    background-color: #f1f8e9; 
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(76, 175, 80, 0.2);
+}
+
+.selected-btn {
+    background-color: var(--success) !important;
+    cursor: default;
+}
+
+/* =========================================
+   MOBILE OPTIMIZATION (Phones < 480px)
+   ========================================= */
+@media (max-width: 480px) {
+  body {
+    padding: 1rem; /* Less padding on small screens */
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+
+  /* Stack admin inputs vertically */
+  .input-group {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  input[type="text"], .btn-add {
+    width: 100%; /* Full width for easier tapping */
+  }
+
+  /* Make food cards span full width for better readability */
+  .food-grid {
+    grid-template-columns: 1fr; 
+  }
+
+  .admin-controls {
+    padding: 1rem;
+  }
+
+  /* Stack danger buttons vertically */
+  .danger-zone {
+    flex-direction: column;
+  }
+  
+  .danger-zone button {
+    width: 100%;
+  }
+}
