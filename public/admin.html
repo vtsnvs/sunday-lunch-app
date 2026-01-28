@@ -16,7 +16,7 @@
             <input type="text" id="new-user-name" placeholder="New team member name...">
             <button id="add-user-btn" class="btn-add">Add Person</button>
         </div>
-        <div id="user-list-admin" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:15px;"></div>
+        <div id="user-list-admin" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;"></div>
     </div>
 
     <h2>Current Menu</h2>
@@ -24,26 +24,15 @@
         <input type="text" id="food-name" placeholder="Add food option...">
         <button id="add-food-btn" class="btn-add">Add Food</button>
     </div>
-    
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>Dish Name</th>
-                <th style="text-align:center;">Votes</th>
-                <th style="text-align:right;">Action</th>
-            </tr>
-        </thead>
-        <tbody id="food-table-body">
-            </tbody>
-    </table>
+    <div id="food-items" class="food-grid"></div>
 
     <div class="admin-controls">
         <h2>Control Panel</h2>
         
         <div class="danger-zone">
             <button id="close-votes-btn" style="background:#555; color:white;">🔒 Close Voting</button>
-            <button id="reset-votes-btn" class="btn-danger">🔄 New Week</button>
-            <button id="reset-all-btn" class="btn-danger">🔥 Reset All</button>
+            <button id="reset-votes-btn" class="btn-danger">🔄 New Week (Reset Votes)</button>
+            <button id="reset-all-btn" class="btn-danger">🔥 Nuke Everything</button>
         </div>
         <p id="admin-message" class="message-box" style="color: var(--primary);"></p>
     </div>
