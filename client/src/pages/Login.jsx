@@ -26,7 +26,7 @@ export default function Login() {
 
     const checkPasswordStatus = async (user) => {
         try {
-            const res = await axios.get(`http://localhost:3000/api/users/status/${user}`);
+            const res = await axios.get(`/users/status/${user}`);
             setShowHint(res.data.isDefault);
         } catch(e) { console.error(e); }
     };

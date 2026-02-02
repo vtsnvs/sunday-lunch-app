@@ -8,7 +8,8 @@ export default function Landing() {
     const [selectedUser, setSelectedUser] = useState("");
 
     useEffect(() => {
-        axios.get('http://localhost:3000/api/users/list')
+        // FIX: Removed hardcoded localhost URL
+        axios.get('/users/list') 
             .then(res => setUsers(res.data)) 
             .catch(err => console.error("Failed to load users", err));
     }, []);
@@ -20,7 +21,6 @@ export default function Landing() {
     };
 
     const handleAdminClick = () => {
-        // Pass selected username even for admin login
         const query = selectedUser ? `?username=${encodeURIComponent(selectedUser)}` : '';
         navigate(`/login${query}`, { state: { target: '/admin-panel' } });
     };
