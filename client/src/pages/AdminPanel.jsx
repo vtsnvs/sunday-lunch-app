@@ -4,7 +4,11 @@ import io from 'socket.io-client';
 import { AuthContext } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-const socket = io("http://localhost:3000", { withCredentials: true });
+const SOCKET_URL = import.meta.env.VITE_API_URL 
+    ? import.meta.env.VITE_API_URL.replace('/api', '') 
+    : "http://localhost:3000";
+
+const socket = io(SOCKET_URL, { withCredentials: true });
 
 export default function AdminPanel() {
     const { user, logout } = useContext(AuthContext);

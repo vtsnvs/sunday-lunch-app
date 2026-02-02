@@ -15,8 +15,17 @@ const cloudinary = require('cloudinary').v2;
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+    "http://localhost:5173", 
+    "http://localhost:3000",
+    process.env.CLIENT_URL // This will be your Render Frontend URL
+];
+
 const io = new Server(server, {
-    cors: { origin: "http://localhost:5173", credentials: true }
+    cors: {
+        origin: allowedOrigins,
+        credentials: true
+    }
 });
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -32,7 +41,18 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(helmet());
 app.use(cookieParser());
 app.use(express.json());
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            // Allow if the origin matches the CLIENT_URL variable exactly
+            if (origin === process.env.CLIENT_URL) return callback(null, true);
+            return callback(new Error('CORS Not Allowed'), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
 
 // --- MIDDLEWARE ---
 const authenticate = (req, res, next) => {
