@@ -367,4 +367,5 @@ app.post('/api/admin/role', requireSuperAdmin, async (req, res) => {
     res.json({message: `User is now ${role}`});
 });
 
-server.listen(3000, () => console.log("Server running on port 3000"));
+const PORT = process.env.PORT || 3000; // Must use process.env.PORT!
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
