@@ -46,7 +46,11 @@ export default function Dashboard() {
     }, [user.role]);
 
     const fetchData = () => {
-        axios.get('/food').then(res => setFood(res.data));
+        axios.get('/food').then(res => {
+            setFood(res.data.items || []); // Get the 'items' array specifically
+            if(res.data.closed !== undefined) setStatus(res.data.closed); // Handle status if it's there
+        }).catch(err => console.error(err));
+        
         axios.get('/status').then(res => setStatus(res.data.closed));
     };
 
