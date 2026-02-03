@@ -24,7 +24,7 @@ export default function AdminPanel() {
     const [newImage, setNewImage] = useState(null);
     const [foodOptions, setFoodOptions] = useState([]); 
     const [optionInput, setOptionInput] = useState("");
-    const [editingId, setEditingId] = useState(null); // Track Edit Mode
+    const [editingId, setEditingId] = useState(null); 
     
     const [newUser, setNewUser] = useState("");
     const [newPass, setNewPass] = useState("");
@@ -83,12 +83,10 @@ export default function AdminPanel() {
         setFoodOptions(foodOptions.filter((_, i) => i !== idx));
     };
 
-    // Populate form for editing
     const handleEdit = (item) => {
         setEditingId(item.id);
         setNewFood(item.name);
         setFoodOptions(item.options || []);
-        // Scroll to top to see form
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -101,27 +99,24 @@ export default function AdminPanel() {
     };
 
     const handleSaveFood = async () => {
-        // FIX: VALIDATION CHECK
+        // FIX 1: Food Validation
         if (!newFood.trim()) {
             return alert("Please enter a food name!");
         }
 
         const formData = new FormData();
-        formData.append('name', newFood.trim()); // Trim whitespace
+        formData.append('name', newFood.trim());
         if (newImage) formData.append('image', newImage);
         formData.append('options', JSON.stringify(foodOptions));
         
         try {
             if (editingId) {
-                // UPDATE
                 await axios.put(`/admin/food/${editingId}`, formData);
                 setEditingId(null);
             } else {
-                // CREATE
                 await axios.post('/admin/food', formData);
             }
             
-            // Clear Form
             setNewFood(""); 
             setNewImage(null);
             setFoodOptions([]);
@@ -139,10 +134,18 @@ export default function AdminPanel() {
         await axios.post('/admin/food/toggle', { id, is_active: !currentStatus });
     };
 
+    // FIX 2: User Validation & Success Message
     const handleCreateUser = async () => {
-        if (!newUser.trim()) return;
-        await axios.post('/admin/users', { username: newUser, role: 'user' });
-        setNewUser("");
+        if (!newUser.trim()) {
+            return alert("Please enter a username!");
+        }
+        try {
+            await axios.post('/admin/users', { username: newUser.trim(), role: 'user' });
+            alert(`User "${newUser}" created successfully! ✅`);
+            setNewUser("");
+        } catch (e) {
+            alert(e.response?.data?.message || "Failed to create user. Name might be taken.");
+        }
     };
 
     const handleDeleteUser = async (username) => {
