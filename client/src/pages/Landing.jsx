@@ -8,10 +8,20 @@ export default function Landing() {
     const [selectedUser, setSelectedUser] = useState("");
 
     useEffect(() => {
-        // FIX: Removed hardcoded localhost URL
         axios.get('/users/list') 
-            .then(res => setUsers(res.data)) 
-            .catch(err => console.error("Failed to load users", err));
+            .then(res => {
+                // SAFETY CHECK: Ensure we actually got an array
+                if (Array.isArray(res.data)) {
+                    setUsers(res.data);
+                } else {
+                    console.error("Data is not an array:", res.data);
+                    setUsers([]); // Fallback to empty list to prevent crash
+                }
+            }) 
+            .catch(err => {
+                console.error("Failed to load users", err);
+                setUsers([]); // Fallback to empty list
+            });
     }, []);
 
     const handleVoteClick = () => {
