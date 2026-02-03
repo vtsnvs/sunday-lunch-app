@@ -100,6 +100,14 @@ export default function Voting() {
                 selections: state.selected || [],
                 notes: state.notes || ''
             });
+            
+            // SUCCESS MESSAGE LOGIC
+            if (votedId) {
+                alert("Order updated successfully! ✅");
+            } else {
+                alert("Order placed successfully! 🚀");
+            }
+
             setVotedId(id);
         } catch (e) { alert(e.response.data.message); }
     };
