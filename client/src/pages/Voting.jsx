@@ -17,6 +17,7 @@ export default function Voting() {
     const [votedId, setVotedId] = useState(null); 
     const [status, setStatus] = useState(false);
     const [favorites, setFavorites] = useState([]); 
+    const [isLoading, setIsLoading] = useState(true); // ADDED: Loading State
     
     const [orderState, setOrderState] = useState({});
     const [newPass, setNewPass] = useState("");
@@ -35,11 +36,9 @@ export default function Voting() {
     }, []);
 
     const fetchData = () => {
+        // setIsLoading(true); // Optional: Use this if you want spinner on every real-time update, but might flicker
         axios.get('/food').then(res => {
             const items = res.data.items || [];
-            
-            // FIX: Ensure we use 'items' here, not 'allItems'
-            // Admins get all items from API, so we filter. Regular users get pre-filtered list.
             const activeItems = items.filter(f => f.is_active); 
             setFood(activeItems);
             
@@ -54,7 +53,10 @@ export default function Voting() {
                     }
                 }));
             }
-        });
+        })
+        .catch(console.error)
+        .finally(() => setIsLoading(false)); // Turn off loading
+
         axios.get('/status').then(res => setStatus(res.data.closed));
     };
 
@@ -101,7 +103,6 @@ export default function Voting() {
                 notes: state.notes || ''
             });
             
-            // SUCCESS MESSAGE LOGIC
             if (votedId) {
                 alert("Order updated successfully! ✅");
             } else {
@@ -123,6 +124,10 @@ export default function Voting() {
     };
 
     const favItems = food.filter(f => favorites.includes(f.id));
+
+    if (isLoading) {
+        return <div className="container centered-layout"><h2>Loading deliciousness... 🍔</h2></div>;
+    }
 
     return (
         <div className="container">

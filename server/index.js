@@ -12,6 +12,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const cron = require('node-cron');
+const rateLimit = require('express-rate-limit'); // Ensure this is installed
 
 const app = express();
 const server = http.createServer(app);
@@ -19,17 +20,18 @@ const server = http.createServer(app);
 const allowedOrigins = [
     "http://localhost:5173", 
     "http://localhost:3000",
-    process.env.CLIENT_URL // This will be your Render Frontend URL
+    process.env.CLIENT_URL
 ];
 
 const io = new Server(server, {
-    cors: {
-        origin: allowedOrigins,
-        credentials: true
-    }
+    cors: { origin: allowedOrigins, credentials: true }
 });
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({ 
+    connectionString: process.env.DATABASE_URL, 
+    ssl: { rejectUnauthorized: false } 
+});
+
 const JWT_SECRET = process.env.JWT_SECRET || 'secret-key-change-this';
 
 cloudinary.config({
@@ -37,7 +39,11 @@ cloudinary.config({
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
-const upload = multer({ storage: multer.memoryStorage() });
+
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 } // Limit to 2MB
+});
 
 app.use(helmet());
 app.use(cookieParser());
@@ -46,7 +52,6 @@ app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
-            // Allow if the origin matches the CLIENT_URL variable exactly
             if (origin === process.env.CLIENT_URL) return callback(null, true);
             return callback(new Error('CORS Not Allowed'), false);
         }
@@ -80,6 +85,13 @@ const requireSuperAdmin = (req, res, next) => {
     });
 };
 
+// Rate Limiter
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 5, 
+    message: { message: "Too many login attempts, please try again later." }
+});
+
 // --- DB INIT ---
 const initDb = async () => {
     try {
@@ -94,17 +106,14 @@ const initDb = async () => {
             CREATE TABLE IF NOT EXISTS food_items (id SERIAL PRIMARY KEY, name TEXT NOT NULL, votes INTEGER DEFAULT 0, image_url TEXT);
             CREATE TABLE IF NOT EXISTS vote_logs (user_id INTEGER REFERENCES users(id), voted_at TIMESTAMP DEFAULT NOW(), food_id INTEGER);
             CREATE TABLE IF NOT EXISTS admin_status (id INTEGER PRIMARY KEY, order_closed BOOLEAN DEFAULT FALSE);
-            
             INSERT INTO admin_status (id, order_closed) VALUES (1, FALSE) ON CONFLICT (id) DO NOTHING;
         `);
 
-        // SCHEMA UPDATE: Favorites & JSON Options
         await pool.query(`
             ALTER TABLE food_items ADD COLUMN IF NOT EXISTS options JSONB DEFAULT '[]';
             ALTER TABLE food_items ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
             ALTER TABLE vote_logs ADD COLUMN IF NOT EXISTS selections JSONB DEFAULT '[]';
             ALTER TABLE vote_logs ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT '';
-            
             CREATE TABLE IF NOT EXISTS favorites (
                 user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                 food_id INTEGER REFERENCES food_items(id) ON DELETE CASCADE,
@@ -112,16 +121,13 @@ const initDb = async () => {
             );
         `);
 
-        // Root Admin
         const hash = await bcrypt.hash('admin', 10);
         await pool.query(`
             INSERT INTO users (username, password_hash, role, password_changed) 
             VALUES ('admin', $1, 'admin', FALSE)
             ON CONFLICT (username) DO NOTHING
         `, [hash]);
-        
         console.log("--> Database Initialized");
-
     } catch (err) { console.error("DB Init Error:", err); }
 };
 initDb();
@@ -132,7 +138,10 @@ app.get('/api/users/list', async (req, res) => {
     try {
         const result = await pool.query("SELECT username, role FROM users WHERE username != 'admin' ORDER BY username ASC");
         res.json(result.rows);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("User List Error:", e);
+        res.status(500).json({ message: "Failed to load users" }); 
+    }
 });
 
 app.get('/api/users/status/:username', async (req, res) => {
@@ -140,10 +149,14 @@ app.get('/api/users/status/:username', async (req, res) => {
         const result = await pool.query("SELECT password_changed FROM users WHERE username = $1", [req.params.username]);
         if (result.rows.length === 0) return res.json({ isDefault: false });
         res.json({ isDefault: !result.rows[0].password_changed });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("User Status Error:", e);
+        res.status(500).json({ message: "Error checking status" }); 
+    }
 });
 
-app.post('/api/login', async (req, res) => {
+// FIX: Applied loginLimiter here!
+app.post('/api/login', loginLimiter, async (req, res) => {
     const { username, password } = req.body;
     try {
         const result = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
@@ -154,49 +167,56 @@ app.post('/api/login', async (req, res) => {
         if (!valid) return res.status(401).json({ message: "Invalid password" });
 
         const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-        
         const isProduction = process.env.NODE_ENV === 'production';
 
         res.cookie('token', token, { 
             httpOnly: true, 
             secure: isProduction, 
-            sameSite: 'lax', // CHANGE THIS to 'lax' (Better for Proxy)
+            sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000 
         });
         res.json({ user: { id: user.id, username: user.username, role: user.role } });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Login Error:", e);
+        res.status(500).json({ message: "Login failed" }); 
+    }
 });
 
 app.post('/api/auth/change-password', authenticate, async (req, res) => {
-    const { newPassword } = req.body;
-    const hash = await bcrypt.hash(newPassword, 10);
-    await pool.query("UPDATE users SET password_hash=$1, password_changed=TRUE WHERE id=$2", [hash, req.user.id]);
-    res.json({ message: "Updated" });
+    try {
+        const { newPassword } = req.body;
+        const hash = await bcrypt.hash(newPassword, 10);
+        await pool.query("UPDATE users SET password_hash=$1, password_changed=TRUE WHERE id=$2", [hash, req.user.id]);
+        res.json({ message: "Updated" });
+    } catch (e) {
+        console.error("Change Password Error:", e);
+        res.status(500).json({ message: "Failed to update password" });
+    }
 });
 
 app.get('/api/me', authenticate, (req, res) => res.json({ user: req.user }));
+
 app.post('/api/logout', (req, res) => { 
     const isProduction = process.env.NODE_ENV === 'production';
-    
-    res.clearCookie('token', {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: 'lax' // CHANGE THIS to match
-    });
-    
+    res.clearCookie('token', { httpOnly: true, secure: isProduction, sameSite: 'lax' });
     res.json({ message: "Logged out" }); 
 });
 
 // --- FAVORITES ---
 app.get('/api/favorites', authenticate, async (req, res) => {
-    const result = await pool.query("SELECT food_id FROM favorites WHERE user_id=$1", [req.user.id]);
-    res.json(result.rows.map(r => r.food_id));
+    try {
+        const result = await pool.query("SELECT food_id FROM favorites WHERE user_id=$1", [req.user.id]);
+        res.json(result.rows.map(r => r.food_id));
+    } catch (e) {
+        console.error("Favorites Error:", e);
+        res.status(500).json({ message: "Failed to load favorites" });
+    }
 });
 
 app.post('/api/favorites', authenticate, async (req, res) => {
-    const { food_id } = req.body;
-    const user_id = req.user.id;
     try {
+        const { food_id } = req.body;
+        const user_id = req.user.id;
         const check = await pool.query("SELECT * FROM favorites WHERE user_id=$1 AND food_id=$2", [user_id, food_id]);
         if(check.rows.length > 0) {
             await pool.query("DELETE FROM favorites WHERE user_id=$1 AND food_id=$2", [user_id, food_id]);
@@ -205,30 +225,43 @@ app.post('/api/favorites', authenticate, async (req, res) => {
             await pool.query("INSERT INTO favorites (user_id, food_id) VALUES ($1, $2)", [user_id, food_id]);
             res.json({ added: true });
         }
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { 
+        console.error("Toggle Favorite Error:", e);
+        res.status(500).json({ message: "Error updating favorite" }); 
+    }
 });
 
 // --- VOTING & DATA ---
-
 app.get('/api/food', authenticate, async (req, res) => {
-    let query = "SELECT * FROM food_items WHERE is_active = TRUE ORDER BY id ASC";
-    if (req.user.role === 'admin') query = "SELECT * FROM food_items ORDER BY id ASC";
+    try {
+        let query = "SELECT * FROM food_items WHERE is_active = TRUE ORDER BY id ASC";
+        if (req.user.role === 'admin') query = "SELECT * FROM food_items ORDER BY id ASC";
 
-    const result = await pool.query(query);
-    const myVote = await pool.query("SELECT food_id, selections, notes FROM vote_logs WHERE user_id=$1", [req.user.id]);
-    
-    res.json({ items: result.rows, voteData: myVote.rows[0] || null });
+        const result = await pool.query(query);
+        const myVote = await pool.query("SELECT food_id, selections, notes FROM vote_logs WHERE user_id=$1", [req.user.id]);
+        
+        res.json({ items: result.rows, voteData: myVote.rows[0] || null });
+    } catch (e) {
+        console.error("Fetch Food Error:", e);
+        res.status(500).json({ message: "Failed to load menu" });
+    }
 });
 
 app.get('/api/status', authenticate, async (req, res) => {
-    const result = await pool.query("SELECT order_closed FROM admin_status WHERE id=1");
-    res.json({ closed: result.rows[0].order_closed });
+    try {
+        const result = await pool.query("SELECT order_closed FROM admin_status WHERE id=1");
+        res.json({ closed: result.rows[0].order_closed });
+    } catch (e) {
+        console.error("Status Error:", e);
+        res.status(500).json({ message: "Error checking status" });
+    }
 });
 
 app.post('/api/vote', authenticate, async (req, res) => {
-    const { food_id, selections, notes } = req.body;
-    const user_id = req.user.id;
     try {
+        const { food_id, selections, notes } = req.body;
+        const user_id = req.user.id;
+        
         const status = await pool.query("SELECT order_closed FROM admin_status WHERE id=1");
         if (status.rows[0].order_closed) return res.status(403).json({ message: "Voting Closed" });
         
@@ -252,11 +285,13 @@ app.post('/api/vote', authenticate, async (req, res) => {
         }
         io.emit('update', { type: 'votes' });
         res.json({ message: "Voted" });
-    } catch (e) { res.status(500).json({error: e.message}); }
+    } catch (e) { 
+        console.error("Voting Error:", e);
+        res.status(500).json({ message: "Failed to submit vote" }); 
+    }
 });
 
 // --- ADMIN ---
-
 app.get('/api/admin/orders', requireAdmin, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -267,34 +302,15 @@ app.get('/api/admin/orders', requireAdmin, async (req, res) => {
             ORDER BY u.username ASC
         `);
         res.json(result.rows);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Orders Error:", e);
+        res.status(500).json({ message: "Failed to load orders" }); 
+    }
 });
 
 app.post('/api/admin/food', requireAdmin, upload.single('image'), async (req, res) => {
-    let imageUrl = null;
-    if (req.file) {
-        const streamUpload = (buffer) => new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream((error, result) => {
-                if (result) resolve(result); else reject(error);
-            });
-            stream.end(buffer);
-        });
-        const result = await streamUpload(req.file.buffer);
-        imageUrl = result.secure_url;
-    }
-    const options = req.body.options ? req.body.options : '[]';
-    await pool.query("INSERT INTO food_items (name, image_url, options, is_active) VALUES ($1, $2, $3, TRUE)", 
-        [req.body.name, imageUrl, options]);
-    io.emit('update', { type: 'menu' });
-    res.json({ message: "Food Added" });
-});
-
-app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req, res) => {
-    const { id } = req.params;
-    const { name, options } = req.body;
-    let imageUrl = null;
-
     try {
+        let imageUrl = null;
         if (req.file) {
             const streamUpload = (buffer) => new Promise((resolve, reject) => {
                 const stream = cloudinary.uploader.upload_stream((error, result) => {
@@ -304,7 +320,33 @@ app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req,
             });
             const result = await streamUpload(req.file.buffer);
             imageUrl = result.secure_url;
-            
+        }
+        const options = req.body.options ? req.body.options : '[]';
+        await pool.query("INSERT INTO food_items (name, image_url, options, is_active) VALUES ($1, $2, $3, TRUE)", 
+            [req.body.name, imageUrl, options]);
+        io.emit('update', { type: 'menu' });
+        res.json({ message: "Food Added" });
+    } catch (e) {
+        console.error("Add Food Error:", e);
+        res.status(500).json({ message: "Failed to add food" });
+    }
+});
+
+app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, options } = req.body;
+        let imageUrl = null;
+
+        if (req.file) {
+            const streamUpload = (buffer) => new Promise((resolve, reject) => {
+                const stream = cloudinary.uploader.upload_stream((error, result) => {
+                    if (result) resolve(result); else reject(error);
+                });
+                stream.end(buffer);
+            });
+            const result = await streamUpload(req.file.buffer);
+            imageUrl = result.secure_url;
             await pool.query("UPDATE food_items SET name=$1, options=$2, image_url=$3 WHERE id=$4", 
                 [name, options || '[]', imageUrl, id]);
         } else {
@@ -314,59 +356,91 @@ app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req,
         
         io.emit('update', { type: 'menu' });
         res.json({ message: "Food Updated" });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Update Food Error:", e);
+        res.status(500).json({ message: "Failed to update food" }); 
+    }
 });
 
 app.post('/api/admin/food/toggle', requireAdmin, async (req, res) => {
-    const { id, is_active } = req.body;
-    await pool.query("UPDATE food_items SET is_active=$1 WHERE id=$2", [is_active, id]);
-    io.emit('update', { type: 'menu' });
-    res.json({ message: "Updated" });
+    try {
+        const { id, is_active } = req.body;
+        await pool.query("UPDATE food_items SET is_active=$1 WHERE id=$2", [is_active, id]);
+        io.emit('update', { type: 'menu' });
+        res.json({ message: "Updated" });
+    } catch (e) {
+        console.error("Toggle Food Error:", e);
+        res.status(500).json({ message: "Failed to toggle status" });
+    }
 });
 
 app.post('/api/admin/remove', requireAdmin, async (req, res) => {
-    await pool.query("DELETE FROM food_items WHERE id=$1", [req.body.id]);
-    io.emit('update', { type: 'menu' });
-    res.json({ message: "Removed" });
+    try {
+        await pool.query("DELETE FROM food_items WHERE id=$1", [req.body.id]);
+        io.emit('update', { type: 'menu' });
+        res.json({ message: "Removed" });
+    } catch (e) {
+        console.error("Remove Food Error:", e);
+        res.status(500).json({ message: "Failed to delete item" });
+    }
 });
 
 app.post('/api/admin/toggle', requireAdmin, async (req, res) => {
-    const { closed } = req.body; 
-    await pool.query("UPDATE admin_status SET order_closed=$1 WHERE id=1", [closed]);
-    io.emit('status_change', { closed });
-    res.json({ message: "Status Updated" });
+    try {
+        const { closed } = req.body; 
+        await pool.query("UPDATE admin_status SET order_closed=$1 WHERE id=1", [closed]);
+        io.emit('status_change', { closed });
+        res.json({ message: "Status Updated" });
+    } catch (e) {
+        console.error("Toggle Voting Error:", e);
+        res.status(500).json({ message: "Failed to update voting status" });
+    }
 });
 
 app.post('/api/admin/reset', requireAdmin, async (req, res) => {
-    await pool.query("UPDATE food_items SET votes=0");
-    await pool.query("DELETE FROM vote_logs");
-    await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
-    io.emit('update', { type: 'reset' });
-    res.json({ message: "Reset" });
+    try {
+        await pool.query("UPDATE food_items SET votes=0");
+        await pool.query("DELETE FROM vote_logs");
+        await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
+        io.emit('update', { type: 'reset' });
+        res.json({ message: "Reset" });
+    } catch (e) {
+        console.error("Reset Error:", e);
+        res.status(500).json({ message: "Failed to reset week" });
+    }
 });
 
 app.post('/api/admin/nuke', requireSuperAdmin, async (req, res) => {
-    await pool.query("DELETE FROM food_items");
-    await pool.query("DELETE FROM vote_logs");
-    await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
-    io.emit('update', { type: 'reset' });
-    res.json({ message: "System Nuked" });
+    try {
+        await pool.query("DELETE FROM food_items");
+        await pool.query("DELETE FROM vote_logs");
+        await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
+        io.emit('update', { type: 'reset' });
+        res.json({ message: "System Nuked" });
+    } catch (e) {
+        console.error("Nuke Error:", e);
+        res.status(500).json({ message: "Failed to nuke database" });
+    }
 });
 
 app.post('/api/admin/users', requireSuperAdmin, async (req, res) => {
-    const { username, role } = req.body;
-    const hash = await bcrypt.hash('admin', 10);
     try {
+        const { username, role } = req.body;
+        const hash = await bcrypt.hash('admin', 10);
         await pool.query("INSERT INTO users (username, password_hash, role, password_changed) VALUES ($1, $2, $3, FALSE)", [username, hash, role || 'user']);
         io.emit('update', { type: 'users' }); 
         res.json({ message: "User Created" });
-    } catch (e) { res.status(500).json({ message: "Username exists" }); }
+    } catch (e) { 
+        console.error("Create User Error:", e);
+        if (e.code === '23505') return res.status(400).json({ message: "Username already exists" });
+        res.status(500).json({ message: "Failed to create user" }); 
+    }
 });
 
 app.post('/api/admin/delete-user', requireSuperAdmin, async (req, res) => {
-    const { username } = req.body;
-    if(username === 'admin') return res.status(403).json({message: "Cannot delete root admin"});
     try {
+        const { username } = req.body;
+        if(username === 'admin') return res.status(403).json({message: "Cannot delete root admin"});
         const u = await pool.query("SELECT id FROM users WHERE username=$1", [username]);
         if(u.rows.length > 0) {
             await pool.query("DELETE FROM vote_logs WHERE user_id=$1", [u.rows[0].id]);
@@ -374,25 +448,31 @@ app.post('/api/admin/delete-user', requireSuperAdmin, async (req, res) => {
             io.emit('update', { type: 'users' });
             res.json({message: "User Deleted"});
         } else { res.status(404).json({message: "Not found"}); }
-    } catch(e) { res.status(500).json({error:e.message}); }
+    } catch(e) { 
+        console.error("Delete User Error:", e);
+        res.status(500).json({ message: "Failed to delete user" }); 
+    }
 });
 
 app.post('/api/admin/role', requireSuperAdmin, async (req, res) => {
-    const { username, role } = req.body;
-    if(username === 'admin') return res.status(403).json({message: "Cannot modify root admin"});
-    await pool.query("UPDATE users SET role=$1 WHERE username=$2", [role, username]);
-    io.emit('update', { type: 'users' });
-    res.json({message: `User is now ${role}`});
+    try {
+        const { username, role } = req.body;
+        if(username === 'admin') return res.status(403).json({message: "Cannot modify root admin"});
+        await pool.query("UPDATE users SET role=$1 WHERE username=$2", [role, username]);
+        io.emit('update', { type: 'users' });
+        res.json({message: `User is now ${role}`});
+    } catch (e) {
+        console.error("Role Update Error:", e);
+        res.status(500).json({ message: "Failed to update role" });
+    }
 });
 
-// Schedule: Runs every Monday at 00:00 (Midnight)
 cron.schedule('0 0 * * 1', async () => {
     console.log('⏰ Running Automatic Weekly Reset...');
     try {
         await pool.query("UPDATE food_items SET votes=0");
         await pool.query("DELETE FROM vote_logs");
         await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
-        
         io.emit('update', { type: 'reset' });
         console.log('✅ Weekly Reset Complete');
     } catch (e) {
@@ -400,6 +480,5 @@ cron.schedule('0 0 * * 1', async () => {
     }
 });
 
-const PORT = process.env.PORT || 3000; // Must use process.env.PORT!
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
