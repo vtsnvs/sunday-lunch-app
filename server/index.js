@@ -12,7 +12,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const cron = require('node-cron');
-const rateLimit = require('express-rate-limit'); // Ensure this is installed
+// REMOVED: const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -85,12 +85,7 @@ const requireSuperAdmin = (req, res, next) => {
     });
 };
 
-// Rate Limiter
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 5, 
-    message: { message: "Too many login attempts, please try again later." }
-});
+// REMOVED: loginLimiter definition
 
 // --- DB INIT ---
 const initDb = async () => {
@@ -155,8 +150,8 @@ app.get('/api/users/status/:username', async (req, res) => {
     }
 });
 
-// FIX: Applied loginLimiter here!
-app.post('/api/login', loginLimiter, async (req, res) => {
+// FIX: Removed loginLimiter
+app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     try {
         const result = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
