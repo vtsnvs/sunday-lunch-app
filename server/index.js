@@ -154,7 +154,14 @@ app.post('/api/login', async (req, res) => {
 
         const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
         
-        res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+        const isProduction = process.env.NODE_ENV === 'production';
+
+        res.cookie('token', token, { 
+            httpOnly: true, 
+            secure: isProduction, // Must be TRUE on Render (HTTPS)
+            sameSite: isProduction ? 'none' : 'lax', // Must be 'none' for cross-site
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 Days
+        });
         res.json({ user: { id: user.id, username: user.username, role: user.role } });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -167,7 +174,17 @@ app.post('/api/auth/change-password', authenticate, async (req, res) => {
 });
 
 app.get('/api/me', authenticate, (req, res) => res.json({ user: req.user }));
-app.post('/api/logout', (req, res) => { res.clearCookie('token'); res.json({ message: "Logged out" }); });
+app.post('/api/logout', (req, res) => { 
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax'
+    });
+    
+    res.json({ message: "Logged out" }); 
+});
 
 // --- FAVORITES ---
 app.get('/api/favorites', authenticate, async (req, res) => {
