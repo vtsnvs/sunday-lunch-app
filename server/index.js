@@ -159,9 +159,9 @@ app.post('/api/login', async (req, res) => {
 
         res.cookie('token', token, { 
             httpOnly: true, 
-            secure: isProduction, // Must be TRUE on Render (HTTPS)
-            sameSite: isProduction ? 'none' : 'lax', // Must be 'none' for cross-site
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 Days
+            secure: isProduction, 
+            sameSite: 'lax', // CHANGE THIS to 'lax' (Better for Proxy)
+            maxAge: 7 * 24 * 60 * 60 * 1000 
         });
         res.json({ user: { id: user.id, username: user.username, role: user.role } });
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -181,7 +181,7 @@ app.post('/api/logout', (req, res) => {
     res.clearCookie('token', {
         httpOnly: true,
         secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax'
+        sameSite: 'lax' // CHANGE THIS to match
     });
     
     res.json({ message: "Logged out" }); 
