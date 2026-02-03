@@ -11,6 +11,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
+const cron = require('node-cron');
 
 const app = express();
 const server = http.createServer(app);
@@ -384,5 +385,21 @@ app.post('/api/admin/role', requireSuperAdmin, async (req, res) => {
     res.json({message: `User is now ${role}`});
 });
 
+// Schedule: Runs every Monday at 00:00 (Midnight)
+cron.schedule('0 0 * * 1', async () => {
+    console.log('⏰ Running Automatic Weekly Reset...');
+    try {
+        await pool.query("UPDATE food_items SET votes=0");
+        await pool.query("DELETE FROM vote_logs");
+        await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
+        
+        io.emit('update', { type: 'reset' });
+        console.log('✅ Weekly Reset Complete');
+    } catch (e) {
+        console.error('❌ Auto-Reset Failed:', e);
+    }
+});
+
 const PORT = process.env.PORT || 3000; // Must use process.env.PORT!
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
