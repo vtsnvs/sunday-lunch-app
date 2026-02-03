@@ -12,7 +12,6 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const cron = require('node-cron');
-// REMOVED: const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -85,7 +84,6 @@ const requireSuperAdmin = (req, res, next) => {
     });
 };
 
-// REMOVED: loginLimiter definition
 
 // --- DB INIT ---
 const initDb = async () => {

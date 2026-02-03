@@ -101,8 +101,13 @@ export default function AdminPanel() {
     };
 
     const handleSaveFood = async () => {
+        // FIX: VALIDATION CHECK
+        if (!newFood.trim()) {
+            return alert("Please enter a food name!");
+        }
+
         const formData = new FormData();
-        formData.append('name', newFood);
+        formData.append('name', newFood.trim()); // Trim whitespace
         if (newImage) formData.append('image', newImage);
         formData.append('options', JSON.stringify(foodOptions));
         
