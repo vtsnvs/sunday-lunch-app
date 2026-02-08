@@ -17,6 +17,11 @@ export default function AdminPanel() {
     const [status, setStatus] = useState(false);
     const [userList, setUserList] = useState([]);
     const [orders, setOrders] = useState([]);
+    
+    // NEW: State for shelf toggle and search
+    const [showArchived, setShowArchived] = useState(false);
+    const [shelfSearch, setShelfSearch] = useState(""); // Search state
+    
     const fileInputRef = useRef(null);
 
     // Inputs
@@ -31,6 +36,10 @@ export default function AdminPanel() {
     const [showPassModal, setShowPassModal] = useState(false);
 
     const isSuperAdmin = user.username === 'admin';
+
+    // Filter Logic
+    const activeFood = food.filter(f => f.is_active);
+    const inactiveFood = food.filter(f => !f.is_active);
 
     useEffect(() => {
         fetchData();
@@ -99,7 +108,6 @@ export default function AdminPanel() {
     };
 
     const handleSaveFood = async () => {
-        // FIX 1: Food Validation
         if (!newFood.trim()) {
             return alert("Please enter a food name!");
         }
@@ -134,7 +142,6 @@ export default function AdminPanel() {
         await axios.post('/admin/food/toggle', { id, is_active: !currentStatus });
     };
 
-    // FIX 2: User Validation & Success Message
     const handleCreateUser = async () => {
         if (!newUser.trim()) {
             return alert("Please enter a username!");
@@ -169,6 +176,40 @@ export default function AdminPanel() {
     const toggleVoting = async () => await axios.post('/admin/toggle', { closed: !status });
     const handleReset = async () => { if(confirm("Reset votes for a new week?")) await axios.post('/admin/reset'); };
     const handleNuke = async () => { if(confirm("⚠️ WARNING: This will delete ALL food items. Are you sure?")) await axios.post('/admin/nuke'); };
+
+    // Helper Component for Food Cards
+    const FoodCard = ({ f }) => (
+        <div className={`food-card ${!f.is_active ? 'inactive' : ''}`}>
+            {f.image_url && <img src={f.image_url} className="food-image" alt={f.name} />}
+            <div className="card-content">
+                <div className="food-name">{f.name} {f.is_active ? '' : '(Disabled)'}</div>
+                <div className="vote-count">{f.votes} Votes</div>
+                <div style={{fontSize:'0.8rem', color:'#888', margin:'5px 0'}}>
+                    {f.options && f.options.length > 0 ? f.options.join(', ') : 'No options'}
+                </div>
+                
+                <div style={{display:'flex', gap:'10px', marginTop:'auto', flexWrap:'wrap'}}>
+                    <button 
+                        className="btn-secondary" 
+                        style={{flex:1, fontSize:'0.8rem'}}
+                        onClick={() => handleEdit(f)}
+                    >
+                        Edit ✏️
+                    </button>
+                    <button 
+                        className={f.is_active ? "btn-warning" : "btn-success"} 
+                        style={{flex:1, fontSize:'0.8rem'}}
+                        onClick={() => handleToggleFood(f.id, f.is_active)}
+                    >
+                        {f.is_active ? 'Disable' : 'Enable'}
+                    </button>
+                    <button className="btn-danger" style={{flex:1, fontSize:'0.8rem'}} onClick={() => handleRemove(f.id)}>
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <div className="container">
@@ -248,9 +289,8 @@ export default function AdminPanel() {
                     {editingId && <button className="btn-outline" onClick={handleCancelEdit}>Cancel Edit</button>}
                 </div>
                 
-                <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
-                    
-                    {/* Main Food Inputs */}
+                {/* Form to Add/Edit Food */}
+                <div style={{display:'flex', flexDirection:'column', gap:'20px', marginBottom:'40px'}}>
                     <div className="form-grid">
                         <input placeholder="Dish Name (e.g. Burger)" value={newFood} onChange={e => setNewFood(e.target.value)} />
                         <button 
@@ -261,7 +301,6 @@ export default function AdminPanel() {
                         </button>
                     </div>
                     
-                    {/* Options */}
                     <div style={{background:'#f9f9f9', padding:'15px', borderRadius:'10px'}}>
                         <h4 style={{marginBottom:'10px'}}>Options (e.g. Fries, Spicy)</h4>
                         <div className="form-grid">
@@ -285,40 +324,57 @@ export default function AdminPanel() {
                     <input type="file" ref={fileInputRef} onChange={e => setNewImage(e.target.files[0])} />
                 </div>
                 
-                <div className="food-grid" style={{marginTop:'30px'}}>
-                    {food.map(f => (
-                        <div key={f.id} className={`food-card ${!f.is_active ? 'inactive' : ''}`}>
-                            {f.image_url && <img src={f.image_url} className="food-image" alt={f.name} />}
-                            <div className="card-content">
-                                <div className="food-name">{f.name} {f.is_active ? '' : '(Disabled)'}</div>
-                                <div className="vote-count">{f.votes} Votes</div>
-                                <div style={{fontSize:'0.8rem', color:'#888', margin:'5px 0'}}>
-                                    {f.options && f.options.length > 0 ? f.options.join(', ') : 'No options'}
+                {/* 1. ACTIVE ITEMS */}
+                <h3 style={{color:'var(--success)'}}>Active Menu</h3>
+                {activeFood.length === 0 ? (
+                    <p style={{color:'#888', fontStyle:'italic'}}>No active items. Add some above or enable from archive.</p>
+                ) : (
+                    <div className="food-grid">
+                        {activeFood.map(f => <FoodCard key={f.id} f={f} />)}
+                    </div>
+                )}
+
+                {/* 2. SHELVED (DISABLED) ITEMS */}
+                {inactiveFood.length > 0 && (
+                    <div style={{marginTop: '40px', borderTop: '2px dashed #eee', paddingTop: '20px'}}>
+                        <button 
+                            onClick={() => setShowArchived(!showArchived)} 
+                            className="btn-secondary" 
+                            style={{width: '100%', marginBottom:'20px'}}
+                        >
+                            {showArchived ? 'Hide Shelved Items' : `Show Shelved Items (${inactiveFood.length})`}
+                        </button>
+                        
+                        {showArchived && (
+                            <>
+                                {/* SEARCH BAR */}
+                                <input
+                                    placeholder="🔍 Search shelved items..."
+                                    value={shelfSearch}
+                                    onChange={e => setShelfSearch(e.target.value)}
+                                    style={{
+                                        marginBottom: '20px', 
+                                        padding: '12px', 
+                                        width: '100%', 
+                                        borderRadius: '10px', 
+                                        border: '1px solid #ddd',
+                                        fontSize: '1rem'
+                                    }}
+                                />
+
+                                <div className="food-grid" style={{opacity: 0.8}}>
+                                    {inactiveFood
+                                        .filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase()))
+                                        .map(f => <FoodCard key={f.id} f={f} />)
+                                    }
+                                    {inactiveFood.filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase())).length === 0 && (
+                                        <p style={{color:'#888'}}>No items found matching "{shelfSearch}"</p>
+                                    )}
                                 </div>
-                                
-                                <div style={{display:'flex', gap:'10px', marginTop:'auto', flexWrap:'wrap'}}>
-                                    <button 
-                                        className="btn-secondary" 
-                                        style={{flex:1, fontSize:'0.8rem'}}
-                                        onClick={() => handleEdit(f)}
-                                    >
-                                        Edit ✏️
-                                    </button>
-                                    <button 
-                                        className={f.is_active ? "btn-warning" : "btn-success"} 
-                                        style={{flex:1, fontSize:'0.8rem'}}
-                                        onClick={() => handleToggleFood(f.id, f.is_active)}
-                                    >
-                                        {f.is_active ? 'Disable' : 'Enable'}
-                                    </button>
-                                    <button className="btn-danger" style={{flex:1, fontSize:'0.8rem'}} onClick={() => handleRemove(f.id)}>
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* SUPERADMIN TEAM MGMT */}
