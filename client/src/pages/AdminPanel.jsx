@@ -371,6 +371,8 @@ export default function AdminPanel() {
                     </>
                 )}
             </div>
+                )}
+            </div>
 
             {/* SUPERADMIN TEAM MGMT */}
             {isSuperAdmin && (
