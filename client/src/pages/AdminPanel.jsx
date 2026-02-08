@@ -335,45 +335,40 @@ export default function AdminPanel() {
                 )}
 
                 {/* 2. SHELVED (DISABLED) ITEMS */}
-                {inactiveFood.length > 0 && (
-                    <div style={{marginTop: '40px', borderTop: '2px dashed #eee', paddingTop: '20px'}}>
-                        <button 
-                            onClick={() => setShowArchived(!showArchived)} 
-                            className="btn-secondary" 
-                            style={{width: '100%', marginBottom:'20px'}}
-                        >
-                            {showArchived ? 'Hide Shelved Items' : `Show Shelved Items (${inactiveFood.length})`}
-                        </button>
-                        
-                        {showArchived && (
-                            <>
-                                {/* SEARCH BAR */}
-                                <input
-                                    placeholder="🔍 Search shelved items..."
-                                    value={shelfSearch}
-                                    onChange={e => setShelfSearch(e.target.value)}
-                                    style={{
-                                        marginBottom: '20px', 
-                                        padding: '12px', 
-                                        width: '100%', 
-                                        borderRadius: '10px', 
-                                        border: '1px solid #ddd',
-                                        fontSize: '1rem'
-                                    }}
-                                />
+            <div style={{marginTop: '40px', borderTop: '2px dashed #eee', paddingTop: '20px'}}>
+                <h3 style={{color:'#777'}}>🗄️ Archive (Disabled)</h3>
+                <button 
+                    onClick={() => setShowArchived(!showArchived)} 
+                    className="btn-secondary" 
+                    style={{width: '100%', marginBottom:'20px'}}
+                >
+                    {showArchived ? 'Hide Shelved Items' : `Show Shelved Items (${inactiveFood.length})`}
+                </button>
+                
+                {showArchived && (
+                    <>
+                        <input
+                            placeholder="🔍 Search shelved items..."
+                            value={shelfSearch}
+                            onChange={e => setShelfSearch(e.target.value)}
+                            style={{
+                                marginBottom: '20px', 
+                                padding: '12px', 
+                                width: '100%', 
+                                borderRadius: '10px', 
+                                border: '1px solid #ddd',
+                                fontSize: '1rem'
+                            }}
+                        />
 
-                                <div className="food-grid" style={{opacity: 0.8}}>
-                                    {inactiveFood
-                                        .filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase()))
-                                        .map(f => <FoodCard key={f.id} f={f} />)
-                                    }
-                                    {inactiveFood.filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase())).length === 0 && (
-                                        <p style={{color:'#888'}}>No items found matching "{shelfSearch}"</p>
-                                    )}
-                                </div>
-                            </>
-                        )}
-                    </div>
+                        <div className="food-grid" style={{opacity: 0.8}}>
+                            {inactiveFood.length === 0 && <p style={{color:'#ccc'}}>No items in archive.</p>}
+                            {inactiveFood
+                                .filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase()))
+                                .map(f => <FoodCard key={f.id} f={f} />)
+                            }
+                        </div>
+                    </>
                 )}
             </div>
 
