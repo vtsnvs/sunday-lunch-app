@@ -10,7 +10,7 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
 
 const socket = io(SOCKET_URL, { withCredentials: true });
 
-// --- HELPER COMPONENT (Moved Outside to prevent flickering) ---
+// --- HELPER COMPONENT (Moved Outside to prevent flickering/loss of focus) ---
 const FoodCard = ({ f, onEdit, onToggle, onRemove }) => (
     <div className={`food-card ${!f.is_active ? 'inactive' : ''}`}>
         {f.image_url && <img src={f.image_url} className="food-image" alt={f.name} />}
@@ -44,6 +44,7 @@ const FoodCard = ({ f, onEdit, onToggle, onRemove }) => (
     </div>
 );
 
+// --- MAIN COMPONENT ---
 export default function AdminPanel() {
     const { user, logout } = useContext(AuthContext);
     const navigate = useNavigate();
@@ -211,6 +212,13 @@ export default function AdminPanel() {
     const handleReset = async () => { if(confirm("Reset votes for a new week?")) await axios.post('/admin/reset'); };
     const handleNuke = async () => { if(confirm("⚠️ WARNING: This will delete ALL food items. Are you sure?")) await axios.post('/admin/nuke'); };
 
+    // Common Style for Section Headers
+    const SectionHeader = ({ title, icon }) => (
+        <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'20px', marginTop:'10px', borderBottom:'2px solid #f0f0f0', paddingBottom:'10px'}}>
+            <h3 style={{margin:0, color:'var(--text-dark)', fontSize:'1.3rem'}}>{icon} {title}</h3>
+        </div>
+    );
+
     return (
         <div className="container">
             <div className="flex-between" style={{marginBottom:'2rem'}}>
@@ -324,10 +332,13 @@ export default function AdminPanel() {
                     <input type="file" ref={fileInputRef} onChange={e => setNewImage(e.target.files[0])} />
                 </div>
                 
-                {/* 1. ACTIVE ITEMS */}
-                <h3 style={{color:'var(--success)', borderBottom:'1px solid #eee', paddingBottom:'5px'}}>Active Menu</h3>
+                {/* 1. ACTIVE ITEMS SECTION */}
+                <SectionHeader title="Active Menu" icon="🍽️" />
+                
                 {activeFood.length === 0 ? (
-                    <p style={{color:'#888', fontStyle:'italic'}}>No active items. Add some above or enable from archive.</p>
+                    <p style={{color:'#888', fontStyle:'italic', textAlign:'center', padding:'20px'}}>
+                        No active items. Add some above or enable from archive.
+                    </p>
                 ) : (
                     <div className="food-grid">
                         {activeFood.map(f => (
@@ -341,28 +352,29 @@ export default function AdminPanel() {
                     </div>
                 )}
 
-                {/* 2. SHELVED (DISABLED) ITEMS */}
+                {/* 2. SHELVED (DISABLED) ITEMS SECTION */}
                 {inactiveFood.length > 0 && (
-                    <div style={{marginTop: '40px', borderTop: '2px dashed #eee', paddingTop: '20px'}}>
-                        <h3 style={{color:'#777', borderBottom:'1px solid #eee', paddingBottom:'5px'}}>🗄️ Archive</h3>
+                    <div style={{marginTop: '50px'}}>
+                        <SectionHeader title="Archive (Shelved)" icon="🗄️" />
+                        
                         <button 
                             onClick={() => setShowArchived(!showArchived)} 
                             className="btn-secondary" 
-                            style={{width: '100%', marginBottom:'20px', marginTop:'10px'}}
+                            style={{width: '100%', marginBottom:'20px'}}
                         >
                             {showArchived ? 'Hide Shelved Items' : `Show Shelved Items (${inactiveFood.length})`}
                         </button>
                         
                         {showArchived && (
-                            <>
+                            <div className="fade-in">
                                 <input
                                     placeholder="🔍 Search shelved items..."
                                     value={shelfSearch}
                                     onChange={e => setShelfSearch(e.target.value)}
-                                    style={{ marginBottom: '20px' }} 
+                                    style={{ marginBottom: '20px', padding:'12px', borderRadius:'10px', border:'1px solid #ddd', width:'100%' }} 
                                 />
 
-                                <div className="food-grid" style={{opacity: 0.8}}>
+                                <div className="food-grid" style={{opacity: 0.85}}>
                                     {inactiveFood
                                         .filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase()))
                                         .map(f => (
@@ -375,10 +387,10 @@ export default function AdminPanel() {
                                         ))
                                     }
                                     {inactiveFood.filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase())).length === 0 && (
-                                        <p style={{color:'#888'}}>No items found matching "{shelfSearch}"</p>
+                                        <p style={{color:'#888', textAlign:'center'}}>No items found matching "{shelfSearch}"</p>
                                     )}
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
                 )}
