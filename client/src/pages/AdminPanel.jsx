@@ -10,6 +10,40 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
 
 const socket = io(SOCKET_URL, { withCredentials: true });
 
+// --- HELPER COMPONENT (Moved Outside to prevent flickering) ---
+const FoodCard = ({ f, onEdit, onToggle, onRemove }) => (
+    <div className={`food-card ${!f.is_active ? 'inactive' : ''}`}>
+        {f.image_url && <img src={f.image_url} className="food-image" alt={f.name} />}
+        <div className="card-content">
+            <div className="food-name">{f.name} {f.is_active ? '' : '(Disabled)'}</div>
+            <div className="vote-count">{f.votes} Votes</div>
+            <div style={{fontSize:'0.8rem', color:'#888', margin:'5px 0'}}>
+                {f.options && f.options.length > 0 ? f.options.join(', ') : 'No options'}
+            </div>
+            
+            <div style={{display:'flex', gap:'10px', marginTop:'auto', flexWrap:'wrap'}}>
+                <button 
+                    className="btn-secondary" 
+                    style={{flex:1, fontSize:'0.8rem'}}
+                    onClick={() => onEdit(f)}
+                >
+                    Edit ✏️
+                </button>
+                <button 
+                    className={f.is_active ? "btn-warning" : "btn-success"} 
+                    style={{flex:1, fontSize:'0.8rem'}}
+                    onClick={() => onToggle(f.id, f.is_active)}
+                >
+                    {f.is_active ? 'Disable' : 'Enable'}
+                </button>
+                <button className="btn-danger" style={{flex:1, fontSize:'0.8rem'}} onClick={() => onRemove(f.id)}>
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
 export default function AdminPanel() {
     const { user, logout } = useContext(AuthContext);
     const navigate = useNavigate();
@@ -18,7 +52,7 @@ export default function AdminPanel() {
     const [userList, setUserList] = useState([]);
     const [orders, setOrders] = useState([]);
     
-    // NEW: State for shelf toggle and search
+    // State for shelf toggle and search
     const [showArchived, setShowArchived] = useState(false);
     const [shelfSearch, setShelfSearch] = useState(""); 
     
@@ -177,40 +211,6 @@ export default function AdminPanel() {
     const handleReset = async () => { if(confirm("Reset votes for a new week?")) await axios.post('/admin/reset'); };
     const handleNuke = async () => { if(confirm("⚠️ WARNING: This will delete ALL food items. Are you sure?")) await axios.post('/admin/nuke'); };
 
-    // Helper Component for Food Cards
-    const FoodCard = ({ f }) => (
-        <div className={`food-card ${!f.is_active ? 'inactive' : ''}`}>
-            {f.image_url && <img src={f.image_url} className="food-image" alt={f.name} />}
-            <div className="card-content">
-                <div className="food-name">{f.name} {f.is_active ? '' : '(Disabled)'}</div>
-                <div className="vote-count">{f.votes} Votes</div>
-                <div style={{fontSize:'0.8rem', color:'#888', margin:'5px 0'}}>
-                    {f.options && f.options.length > 0 ? f.options.join(', ') : 'No options'}
-                </div>
-                
-                <div style={{display:'flex', gap:'10px', marginTop:'auto', flexWrap:'wrap'}}>
-                    <button 
-                        className="btn-secondary" 
-                        style={{flex:1, fontSize:'0.8rem'}}
-                        onClick={() => handleEdit(f)}
-                    >
-                        Edit ✏️
-                    </button>
-                    <button 
-                        className={f.is_active ? "btn-warning" : "btn-success"} 
-                        style={{flex:1, fontSize:'0.8rem'}}
-                        onClick={() => handleToggleFood(f.id, f.is_active)}
-                    >
-                        {f.is_active ? 'Disable' : 'Enable'}
-                    </button>
-                    <button className="btn-danger" style={{flex:1, fontSize:'0.8rem'}} onClick={() => handleRemove(f.id)}>
-                        Delete
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-
     return (
         <div className="container">
             <div className="flex-between" style={{marginBottom:'2rem'}}>
@@ -330,7 +330,14 @@ export default function AdminPanel() {
                     <p style={{color:'#888', fontStyle:'italic'}}>No active items. Add some above or enable from archive.</p>
                 ) : (
                     <div className="food-grid">
-                        {activeFood.map(f => <FoodCard key={f.id} f={f} />)}
+                        {activeFood.map(f => (
+                            <FoodCard 
+                                key={f.id} f={f} 
+                                onEdit={handleEdit} 
+                                onToggle={handleToggleFood} 
+                                onRemove={handleRemove} 
+                            />
+                        ))}
                     </div>
                 )}
 
@@ -358,7 +365,14 @@ export default function AdminPanel() {
                                 <div className="food-grid" style={{opacity: 0.8}}>
                                     {inactiveFood
                                         .filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase()))
-                                        .map(f => <FoodCard key={f.id} f={f} />)
+                                        .map(f => (
+                                            <FoodCard 
+                                                key={f.id} f={f} 
+                                                onEdit={handleEdit} 
+                                                onToggle={handleToggleFood} 
+                                                onRemove={handleRemove} 
+                                            />
+                                        ))
                                     }
                                     {inactiveFood.filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase())).length === 0 && (
                                         <p style={{color:'#888'}}>No items found matching "{shelfSearch}"</p>
