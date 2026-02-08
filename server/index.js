@@ -1,7 +1,8 @@
-// server/index.js
+
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const https = require('https'); // ADDED: Required for self-ping
 const { Server } = require("socket.io");
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -84,7 +85,6 @@ const requireSuperAdmin = (req, res, next) => {
     });
 };
 
-
 // --- DB INIT ---
 const initDb = async () => {
     try {
@@ -127,6 +127,11 @@ initDb();
 
 // --- ROUTES ---
 
+// 1. HEALTH CHECK ROUTE (Fixes Uptime Bot)
+app.get('/', (req, res) => {
+    res.status(200).send("Sunday Lunch Backend is Alive! 🍽️");
+});
+
 app.get('/api/users/list', async (req, res) => {
     try {
         const result = await pool.query("SELECT username, role FROM users WHERE username != 'admin' ORDER BY username ASC");
@@ -148,7 +153,6 @@ app.get('/api/users/status/:username', async (req, res) => {
     }
 });
 
-// FIX: Removed loginLimiter
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -460,6 +464,19 @@ app.post('/api/admin/role', requireSuperAdmin, async (req, res) => {
     }
 });
 
+// 2. INTERNAL KEEP ALIVE (Self Ping)
+// Runs every 14 minutes to prevent Render Free Tier from sleeping
+cron.schedule('*/14 * * * *', () => {
+    const backendUrl = "https://sunday-lunch-backend.onrender.com/";
+    console.log(`⏰ Triggering self-ping to ${backendUrl}`);
+    https.get(backendUrl, (res) => {
+        console.log(`✅ Self-ping status: ${res.statusCode}`);
+    }).on('error', (e) => {
+        console.error(`❌ Self-ping failed: ${e.message}`);
+    });
+});
+
+// Weekly Reset Schedule
 cron.schedule('0 0 * * 1', async () => {
     console.log('⏰ Running Automatic Weekly Reset...');
     try {
