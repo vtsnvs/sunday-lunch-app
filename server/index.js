@@ -1,8 +1,7 @@
-
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
-const https = require('https'); // ADDED: Required for self-ping
+const https = require('https'); 
 const { Server } = require("socket.io");
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -44,6 +43,21 @@ const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 2 * 1024 * 1024 } // Limit to 2MB
 });
+
+// --- HELPER: Extract Public ID from Cloudinary URL ---
+const getPublicIdFromUrl = (url) => {
+    if (!url || !url.includes('cloudinary')) return null;
+    try {
+        // Example: https://res.cloudinary.com/.../v12345/sample_image.jpg
+        const parts = url.split('/');
+        const fileWithExtension = parts[parts.length - 1]; 
+        const publicId = fileWithExtension.split('.')[0]; // remove .jpg/.png
+        return publicId;
+    } catch (e) {
+        console.error("Error parsing Public ID:", e);
+        return null;
+    }
+};
 
 app.use(helmet());
 app.use(cookieParser());
@@ -127,7 +141,6 @@ initDb();
 
 // --- ROUTES ---
 
-// 1. HEALTH CHECK ROUTE (Fixes Uptime Bot)
 app.get('/', (req, res) => {
     res.status(200).send("Sunday Lunch Backend is Alive! 🍽️");
 });
@@ -329,6 +342,7 @@ app.post('/api/admin/food', requireAdmin, upload.single('image'), async (req, re
     }
 });
 
+// FIX: Automatically delete OLD image when replacing with NEW image
 app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req, res) => {
     try {
         const { id } = req.params;
@@ -336,6 +350,7 @@ app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req,
         let imageUrl = null;
 
         if (req.file) {
+            // 1. Upload NEW image
             const streamUpload = (buffer) => new Promise((resolve, reject) => {
                 const stream = cloudinary.uploader.upload_stream((error, result) => {
                     if (result) resolve(result); else reject(error);
@@ -344,6 +359,20 @@ app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req,
             });
             const result = await streamUpload(req.file.buffer);
             imageUrl = result.secure_url;
+
+            // 2. Fetch OLD image URL
+            const oldItem = await pool.query("SELECT image_url FROM food_items WHERE id=$1", [id]);
+            
+            // 3. Delete OLD image from Cloudinary
+            if (oldItem.rows.length > 0 && oldItem.rows[0].image_url) {
+                const publicId = getPublicIdFromUrl(oldItem.rows[0].image_url);
+                if (publicId) {
+                    console.log(`🗑️ Deleting old image: ${publicId}`);
+                    await cloudinary.uploader.destroy(publicId);
+                }
+            }
+
+            // 4. Update Database
             await pool.query("UPDATE food_items SET name=$1, options=$2, image_url=$3 WHERE id=$4", 
                 [name, options || '[]', imageUrl, id]);
         } else {
@@ -371,9 +400,25 @@ app.post('/api/admin/food/toggle', requireAdmin, async (req, res) => {
     }
 });
 
+// FIX: Automatically delete image when removing food item
 app.post('/api/admin/remove', requireAdmin, async (req, res) => {
     try {
-        await pool.query("DELETE FROM food_items WHERE id=$1", [req.body.id]);
+        const { id } = req.body;
+        
+        // 1. Fetch item to get URL
+        const item = await pool.query("SELECT image_url FROM food_items WHERE id=$1", [id]);
+        
+        // 2. Delete from Cloudinary
+        if (item.rows.length > 0 && item.rows[0].image_url) {
+            const publicId = getPublicIdFromUrl(item.rows[0].image_url);
+            if (publicId) {
+                console.log(`🗑️ Deleting removed image: ${publicId}`);
+                await cloudinary.uploader.destroy(publicId);
+            }
+        }
+
+        // 3. Delete from DB
+        await pool.query("DELETE FROM food_items WHERE id=$1", [id]);
         io.emit('update', { type: 'menu' });
         res.json({ message: "Removed" });
     } catch (e) {
@@ -465,7 +510,6 @@ app.post('/api/admin/role', requireSuperAdmin, async (req, res) => {
 });
 
 // 2. INTERNAL KEEP ALIVE (Self Ping)
-// Runs every 14 minutes to prevent Render Free Tier from sleeping
 cron.schedule('*/14 * * * *', () => {
     const backendUrl = "https://sunday-lunch-backend.onrender.com/";
     console.log(`⏰ Triggering self-ping to ${backendUrl}`);
