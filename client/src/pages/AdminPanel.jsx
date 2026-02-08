@@ -20,7 +20,7 @@ export default function AdminPanel() {
     
     // NEW: State for shelf toggle and search
     const [showArchived, setShowArchived] = useState(false);
-    const [shelfSearch, setShelfSearch] = useState(""); // Search state
+    const [shelfSearch, setShelfSearch] = useState(""); 
     
     const fileInputRef = useRef(null);
 
@@ -325,7 +325,7 @@ export default function AdminPanel() {
                 </div>
                 
                 {/* 1. ACTIVE ITEMS */}
-                <h3 style={{color:'var(--success)'}}>Active Menu</h3>
+                <h3 style={{color:'var(--success)', borderBottom:'1px solid #eee', paddingBottom:'5px'}}>Active Menu</h3>
                 {activeFood.length === 0 ? (
                     <p style={{color:'#888', fontStyle:'italic'}}>No active items. Add some above or enable from archive.</p>
                 ) : (
@@ -335,42 +335,38 @@ export default function AdminPanel() {
                 )}
 
                 {/* 2. SHELVED (DISABLED) ITEMS */}
-            <div style={{marginTop: '40px', borderTop: '2px dashed #eee', paddingTop: '20px'}}>
-                <h3 style={{color:'#777'}}>🗄️ Archive (Disabled)</h3>
-                <button 
-                    onClick={() => setShowArchived(!showArchived)} 
-                    className="btn-secondary" 
-                    style={{width: '100%', marginBottom:'20px'}}
-                >
-                    {showArchived ? 'Hide Shelved Items' : `Show Shelved Items (${inactiveFood.length})`}
-                </button>
-                
-                {showArchived && (
-                    <>
-                        <input
-                            placeholder="🔍 Search shelved items..."
-                            value={shelfSearch}
-                            onChange={e => setShelfSearch(e.target.value)}
-                            style={{
-                                marginBottom: '20px', 
-                                padding: '12px', 
-                                width: '100%', 
-                                borderRadius: '10px', 
-                                border: '1px solid #ddd',
-                                fontSize: '1rem'
-                            }}
-                        />
+                {inactiveFood.length > 0 && (
+                    <div style={{marginTop: '40px', borderTop: '2px dashed #eee', paddingTop: '20px'}}>
+                        <h3 style={{color:'#777', borderBottom:'1px solid #eee', paddingBottom:'5px'}}>🗄️ Archive</h3>
+                        <button 
+                            onClick={() => setShowArchived(!showArchived)} 
+                            className="btn-secondary" 
+                            style={{width: '100%', marginBottom:'20px', marginTop:'10px'}}
+                        >
+                            {showArchived ? 'Hide Shelved Items' : `Show Shelved Items (${inactiveFood.length})`}
+                        </button>
+                        
+                        {showArchived && (
+                            <>
+                                <input
+                                    placeholder="🔍 Search shelved items..."
+                                    value={shelfSearch}
+                                    onChange={e => setShelfSearch(e.target.value)}
+                                    style={{ marginBottom: '20px' }} 
+                                />
 
-                        <div className="food-grid" style={{opacity: 0.8}}>
-                            {inactiveFood.length === 0 && <p style={{color:'#ccc'}}>No items in archive.</p>}
-                            {inactiveFood
-                                .filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase()))
-                                .map(f => <FoodCard key={f.id} f={f} />)
-                            }
-                        </div>
-                    </>
-                )}
-            </div>
+                                <div className="food-grid" style={{opacity: 0.8}}>
+                                    {inactiveFood
+                                        .filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase()))
+                                        .map(f => <FoodCard key={f.id} f={f} />)
+                                    }
+                                    {inactiveFood.filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase())).length === 0 && (
+                                        <p style={{color:'#888'}}>No items found matching "{shelfSearch}"</p>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
                 )}
             </div>
 
