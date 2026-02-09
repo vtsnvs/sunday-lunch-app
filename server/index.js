@@ -48,10 +48,9 @@ const upload = multer({
 const getPublicIdFromUrl = (url) => {
     if (!url || !url.includes('cloudinary')) return null;
     try {
-        // Example: https://res.cloudinary.com/.../v12345/sample_image.jpg
         const parts = url.split('/');
         const fileWithExtension = parts[parts.length - 1]; 
-        const publicId = fileWithExtension.split('.')[0]; // remove .jpg/.png
+        const publicId = fileWithExtension.split('.')[0]; 
         return publicId;
     } catch (e) {
         console.error("Error parsing Public ID:", e);
@@ -439,12 +438,14 @@ app.post('/api/admin/toggle', requireAdmin, async (req, res) => {
     }
 });
 
+// FIX: Reset now CLOSES the vote (order_closed = TRUE)
 app.post('/api/admin/reset', requireAdmin, async (req, res) => {
     try {
         await pool.query("UPDATE food_items SET votes=0");
         await pool.query("DELETE FROM vote_logs");
-        await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
+        await pool.query("UPDATE admin_status SET order_closed=TRUE WHERE id=1"); // CLOSED
         io.emit('update', { type: 'reset' });
+        io.emit('status_change', { closed: true });
         res.json({ message: "Reset" });
     } catch (e) {
         console.error("Reset Error:", e);
@@ -452,12 +453,14 @@ app.post('/api/admin/reset', requireAdmin, async (req, res) => {
     }
 });
 
+// FIX: Nuke now CLOSES the vote
 app.post('/api/admin/nuke', requireSuperAdmin, async (req, res) => {
     try {
         await pool.query("DELETE FROM food_items");
         await pool.query("DELETE FROM vote_logs");
-        await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
+        await pool.query("UPDATE admin_status SET order_closed=TRUE WHERE id=1"); // CLOSED
         io.emit('update', { type: 'reset' });
+        io.emit('status_change', { closed: true });
         res.json({ message: "System Nuked" });
     } catch (e) {
         console.error("Nuke Error:", e);
@@ -520,14 +523,15 @@ cron.schedule('*/14 * * * *', () => {
     });
 });
 
-// Weekly Reset Schedule
+// Weekly Reset Schedule: Now Locks Voting (Closed)
 cron.schedule('0 0 * * 1', async () => {
     console.log('⏰ Running Automatic Weekly Reset...');
     try {
         await pool.query("UPDATE food_items SET votes=0");
         await pool.query("DELETE FROM vote_logs");
-        await pool.query("UPDATE admin_status SET order_closed=FALSE WHERE id=1");
+        await pool.query("UPDATE admin_status SET order_closed=TRUE WHERE id=1"); // CLOSED
         io.emit('update', { type: 'reset' });
+        io.emit('status_change', { closed: true });
         console.log('✅ Weekly Reset Complete');
     } catch (e) {
         console.error('❌ Auto-Reset Failed:', e);
