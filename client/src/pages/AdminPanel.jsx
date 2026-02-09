@@ -10,7 +10,7 @@ const SOCKET_URL = import.meta.env.VITE_API_URL
 
 const socket = io(SOCKET_URL, { withCredentials: true });
 
-// --- HELPER COMPONENT (Moved Outside to prevent flickering/loss of focus) ---
+// --- HELPER COMPONENT ---
 const FoodCard = ({ f, onEdit, onToggle, onRemove }) => (
     <div className={`food-card ${!f.is_active ? 'inactive' : ''}`}>
         {f.image_url && <img src={f.image_url} className="food-image" alt={f.name} />}
@@ -22,13 +22,7 @@ const FoodCard = ({ f, onEdit, onToggle, onRemove }) => (
             </div>
             
             <div style={{display:'flex', gap:'10px', marginTop:'auto', flexWrap:'wrap'}}>
-                <button 
-                    className="btn-secondary" 
-                    style={{flex:1, fontSize:'0.8rem'}}
-                    onClick={() => onEdit(f)}
-                >
-                    Edit ✏️
-                </button>
+                <button className="btn-secondary" style={{flex:1, fontSize:'0.8rem'}} onClick={() => onEdit(f)}>Edit ✏️</button>
                 <button 
                     className={f.is_active ? "btn-warning" : "btn-success"} 
                     style={{flex:1, fontSize:'0.8rem'}}
@@ -36,15 +30,12 @@ const FoodCard = ({ f, onEdit, onToggle, onRemove }) => (
                 >
                     {f.is_active ? 'Disable' : 'Enable'}
                 </button>
-                <button className="btn-danger" style={{flex:1, fontSize:'0.8rem'}} onClick={() => onRemove(f.id)}>
-                    Delete
-                </button>
+                <button className="btn-danger" style={{flex:1, fontSize:'0.8rem'}} onClick={() => onRemove(f.id)}>Delete</button>
             </div>
         </div>
     </div>
 );
 
-// --- MAIN COMPONENT ---
 export default function AdminPanel() {
     const { user, logout } = useContext(AuthContext);
     const navigate = useNavigate();
@@ -53,9 +44,11 @@ export default function AdminPanel() {
     const [userList, setUserList] = useState([]);
     const [orders, setOrders] = useState([]);
     
-    // State for shelf toggle and search
+    // States
     const [showArchived, setShowArchived] = useState(false);
     const [shelfSearch, setShelfSearch] = useState(""); 
+    const [isSaving, setIsSaving] = useState(false); // Spinner for Food
+    const [isCreating, setIsCreating] = useState(false); // Spinner for User
     
     const fileInputRef = useRef(null);
 
@@ -71,8 +64,6 @@ export default function AdminPanel() {
     const [showPassModal, setShowPassModal] = useState(false);
 
     const isSuperAdmin = user.username === 'admin';
-
-    // Filter Logic
     const activeFood = food.filter(f => f.is_active);
     const inactiveFood = food.filter(f => !f.is_active);
 
@@ -143,9 +134,8 @@ export default function AdminPanel() {
     };
 
     const handleSaveFood = async () => {
-        if (!newFood.trim()) {
-            return alert("Please enter a food name!");
-        }
+        if (!newFood.trim()) return alert("Please enter a food name!");
+        setIsSaving(true); // START LOADING
 
         const formData = new FormData();
         formData.append('name', newFood.trim());
@@ -159,13 +149,14 @@ export default function AdminPanel() {
             } else {
                 await axios.post('/admin/food', formData);
             }
-            
             setNewFood(""); 
             setNewImage(null);
             setFoodOptions([]);
             if(fileInputRef.current) fileInputRef.current.value = "";
         } catch (e) {
             alert("Error saving food item");
+        } finally {
+            setIsSaving(false); // STOP LOADING
         }
     };
 
@@ -178,15 +169,16 @@ export default function AdminPanel() {
     };
 
     const handleCreateUser = async () => {
-        if (!newUser.trim()) {
-            return alert("Please enter a username!");
-        }
+        if (!newUser.trim()) return alert("Please enter a username!");
+        setIsCreating(true); // START LOADING
         try {
             await axios.post('/admin/users', { username: newUser.trim(), role: 'user' });
             alert(`User "${newUser}" created successfully! ✅`);
             setNewUser("");
         } catch (e) {
-            alert(e.response?.data?.message || "Failed to create user. Name might be taken.");
+            alert(e.response?.data?.message || "Failed to create user.");
+        } finally {
+            setIsCreating(false); // STOP LOADING
         }
     };
 
@@ -210,9 +202,11 @@ export default function AdminPanel() {
 
     const toggleVoting = async () => await axios.post('/admin/toggle', { closed: !status });
     const handleReset = async () => { if(confirm("Reset votes for a new week?")) await axios.post('/admin/reset'); };
-    const handleNuke = async () => { if(confirm("⚠️ WARNING: This will delete ALL food items. Are you sure?")) await axios.post('/admin/nuke'); };
+    const handleNuke = async () => { 
+        const confirmation = prompt("⚠️ DANGER ZONE ⚠️\nThis will delete ALL food items and votes.\n\nType 'NUKE' to confirm:");
+        if (confirmation === 'NUKE') await axios.post('/admin/nuke'); 
+    };
 
-    // Common Style for Section Headers
     const SectionHeader = ({ title, icon }) => (
         <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'20px', marginTop:'10px', borderBottom:'2px solid #f0f0f0', paddingBottom:'10px'}}>
             <h3 style={{margin:0, color:'var(--text-dark)', fontSize:'1.3rem'}}>{icon} {title}</h3>
@@ -297,15 +291,15 @@ export default function AdminPanel() {
                     {editingId && <button className="btn-outline" onClick={handleCancelEdit}>Cancel Edit</button>}
                 </div>
                 
-                {/* Form to Add/Edit Food */}
                 <div style={{display:'flex', flexDirection:'column', gap:'20px', marginBottom:'40px'}}>
                     <div className="form-grid">
                         <input placeholder="Dish Name (e.g. Burger)" value={newFood} onChange={e => setNewFood(e.target.value)} />
                         <button 
                             className={editingId ? "btn-warning" : "btn-primary"} 
                             onClick={handleSaveFood}
+                            disabled={isSaving}
                         >
-                            {editingId ? 'Update Food' : 'Add Food'}
+                            {isSaving ? <><span className="spinner"></span> Saving...</> : (editingId ? 'Update Food' : 'Add Food')}
                         </button>
                     </div>
                     
@@ -332,31 +326,21 @@ export default function AdminPanel() {
                     <input type="file" ref={fileInputRef} onChange={e => setNewImage(e.target.files[0])} />
                 </div>
                 
-                {/* 1. ACTIVE ITEMS SECTION */}
                 <SectionHeader title="Active Menu" icon="🍽️" />
                 
                 {activeFood.length === 0 ? (
-                    <p style={{color:'#888', fontStyle:'italic', textAlign:'center', padding:'20px'}}>
-                        No active items. Add some above or enable from archive.
-                    </p>
+                    <p style={{color:'#888', fontStyle:'italic', textAlign:'center', padding:'20px'}}>No active items.</p>
                 ) : (
                     <div className="food-grid">
                         {activeFood.map(f => (
-                            <FoodCard 
-                                key={f.id} f={f} 
-                                onEdit={handleEdit} 
-                                onToggle={handleToggleFood} 
-                                onRemove={handleRemove} 
-                            />
+                            <FoodCard key={f.id} f={f} onEdit={handleEdit} onToggle={handleToggleFood} onRemove={handleRemove} />
                         ))}
                     </div>
                 )}
 
-                {/* 2. SHELVED (DISABLED) ITEMS SECTION */}
                 {inactiveFood.length > 0 && (
                     <div style={{marginTop: '50px'}}>
                         <SectionHeader title="Archive (Shelved)" icon="🗄️" />
-                        
                         <button 
                             onClick={() => setShowArchived(!showArchived)} 
                             className="btn-secondary" 
@@ -373,22 +357,13 @@ export default function AdminPanel() {
                                     onChange={e => setShelfSearch(e.target.value)}
                                     style={{ marginBottom: '20px', padding:'12px', borderRadius:'10px', border:'1px solid #ddd', width:'100%' }} 
                                 />
-
                                 <div className="food-grid" style={{opacity: 0.85}}>
                                     {inactiveFood
                                         .filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase()))
                                         .map(f => (
-                                            <FoodCard 
-                                                key={f.id} f={f} 
-                                                onEdit={handleEdit} 
-                                                onToggle={handleToggleFood} 
-                                                onRemove={handleRemove} 
-                                            />
+                                            <FoodCard key={f.id} f={f} onEdit={handleEdit} onToggle={handleToggleFood} onRemove={handleRemove} />
                                         ))
                                     }
-                                    {inactiveFood.filter(f => f.name.toLowerCase().includes(shelfSearch.toLowerCase())).length === 0 && (
-                                        <p style={{color:'#888', textAlign:'center'}}>No items found matching "{shelfSearch}"</p>
-                                    )}
                                 </div>
                             </div>
                         )}
@@ -404,7 +379,9 @@ export default function AdminPanel() {
                         <div style={{flexGrow:1, maxWidth:'400px'}}>
                             <div className="form-grid">
                                 <input placeholder="New Team Member Name" value={newUser} onChange={e => setNewUser(e.target.value)} />
-                                <button className="btn-success" onClick={handleCreateUser}>+ Add</button>
+                                <button className="btn-success" onClick={handleCreateUser} disabled={isCreating}>
+                                    {isCreating ? <span className="spinner"></span> : '+ Add'}
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
-const https = require('https'); 
+// Removed https requirement since self-ping is gone
 const { Server } = require("socket.io");
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -341,7 +341,6 @@ app.post('/api/admin/food', requireAdmin, upload.single('image'), async (req, re
     }
 });
 
-// FIX: Automatically delete OLD image when replacing with NEW image
 app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req, res) => {
     try {
         const { id } = req.params;
@@ -349,7 +348,6 @@ app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req,
         let imageUrl = null;
 
         if (req.file) {
-            // 1. Upload NEW image
             const streamUpload = (buffer) => new Promise((resolve, reject) => {
                 const stream = cloudinary.uploader.upload_stream((error, result) => {
                     if (result) resolve(result); else reject(error);
@@ -359,19 +357,12 @@ app.put('/api/admin/food/:id', requireAdmin, upload.single('image'), async (req,
             const result = await streamUpload(req.file.buffer);
             imageUrl = result.secure_url;
 
-            // 2. Fetch OLD image URL
             const oldItem = await pool.query("SELECT image_url FROM food_items WHERE id=$1", [id]);
-            
-            // 3. Delete OLD image from Cloudinary
             if (oldItem.rows.length > 0 && oldItem.rows[0].image_url) {
                 const publicId = getPublicIdFromUrl(oldItem.rows[0].image_url);
-                if (publicId) {
-                    console.log(`🗑️ Deleting old image: ${publicId}`);
-                    await cloudinary.uploader.destroy(publicId);
-                }
+                if (publicId) await cloudinary.uploader.destroy(publicId);
             }
 
-            // 4. Update Database
             await pool.query("UPDATE food_items SET name=$1, options=$2, image_url=$3 WHERE id=$4", 
                 [name, options || '[]', imageUrl, id]);
         } else {
@@ -399,24 +390,14 @@ app.post('/api/admin/food/toggle', requireAdmin, async (req, res) => {
     }
 });
 
-// FIX: Automatically delete image when removing food item
 app.post('/api/admin/remove', requireAdmin, async (req, res) => {
     try {
         const { id } = req.body;
-        
-        // 1. Fetch item to get URL
         const item = await pool.query("SELECT image_url FROM food_items WHERE id=$1", [id]);
-        
-        // 2. Delete from Cloudinary
         if (item.rows.length > 0 && item.rows[0].image_url) {
             const publicId = getPublicIdFromUrl(item.rows[0].image_url);
-            if (publicId) {
-                console.log(`🗑️ Deleting removed image: ${publicId}`);
-                await cloudinary.uploader.destroy(publicId);
-            }
+            if (publicId) await cloudinary.uploader.destroy(publicId);
         }
-
-        // 3. Delete from DB
         await pool.query("DELETE FROM food_items WHERE id=$1", [id]);
         io.emit('update', { type: 'menu' });
         res.json({ message: "Removed" });
@@ -438,7 +419,6 @@ app.post('/api/admin/toggle', requireAdmin, async (req, res) => {
     }
 });
 
-// FIX: Reset now CLOSES the vote (order_closed = TRUE)
 app.post('/api/admin/reset', requireAdmin, async (req, res) => {
     try {
         await pool.query("UPDATE food_items SET votes=0");
@@ -453,7 +433,6 @@ app.post('/api/admin/reset', requireAdmin, async (req, res) => {
     }
 });
 
-// FIX: Nuke now CLOSES the vote
 app.post('/api/admin/nuke', requireSuperAdmin, async (req, res) => {
     try {
         await pool.query("DELETE FROM food_items");
@@ -512,18 +491,7 @@ app.post('/api/admin/role', requireSuperAdmin, async (req, res) => {
     }
 });
 
-// 2. INTERNAL KEEP ALIVE (Self Ping)
-cron.schedule('*/14 * * * *', () => {
-    const backendUrl = "https://sunday-lunch-backend.onrender.com/";
-    console.log(`⏰ Triggering self-ping to ${backendUrl}`);
-    https.get(backendUrl, (res) => {
-        console.log(`✅ Self-ping status: ${res.statusCode}`);
-    }).on('error', (e) => {
-        console.error(`❌ Self-ping failed: ${e.message}`);
-    });
-});
-
-// Weekly Reset Schedule: Now Locks Voting (Closed)
+// Weekly Reset Schedule
 cron.schedule('0 0 * * 1', async () => {
     console.log('⏰ Running Automatic Weekly Reset...');
     try {

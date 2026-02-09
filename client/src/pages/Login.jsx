@@ -13,6 +13,7 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [showHint, setShowHint] = useState(false);
+    const [isLoading, setIsLoading] = useState(false); // ADDED: Loading State
 
     const targetPath = location.state?.target || '/voting';
 
@@ -36,19 +37,21 @@ export default function Login() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
+        setIsLoading(true); // Start loading
         try {
             const user = await login(username, password);
             
-            // Check Permissions Logic
             if (targetPath === '/admin-panel' && user.role !== 'admin') {
-                await logout(); // Clear session immediately
+                await logout();
                 setError("Access Denied: You do not have Admin privileges.");
+                setIsLoading(false);
                 return;
             }
 
             navigate(targetPath);
         } catch (err) {
             setError(err.response?.data?.message || "Login failed");
+            setIsLoading(false); // Stop loading on error
         }
     };
 
@@ -74,7 +77,14 @@ export default function Login() {
                             onChange={e => setPassword(e.target.value)} required
                         />
                     </div>
-                    <button type="submit" className="btn-primary" style={{marginTop:'10px'}}>Login</button>
+                    <button 
+                        type="submit" 
+                        className="btn-primary" 
+                        style={{marginTop:'10px'}}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? <><span className="spinner"></span> Logging in...</> : 'Login'}
+                    </button>
                 </form>
                 
                 {showHint && (

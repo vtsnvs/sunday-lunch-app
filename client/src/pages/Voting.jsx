@@ -17,7 +17,8 @@ export default function Voting() {
     const [votedId, setVotedId] = useState(null); 
     const [status, setStatus] = useState(false);
     const [favorites, setFavorites] = useState([]); 
-    const [isLoading, setIsLoading] = useState(true); // ADDED: Loading State
+    const [isLoading, setIsLoading] = useState(true); 
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
     const [orderState, setOrderState] = useState({});
     const [newPass, setNewPass] = useState("");
@@ -36,7 +37,6 @@ export default function Voting() {
     }, []);
 
     const fetchData = () => {
-        // setIsLoading(true); // Optional: Use this if you want spinner on every real-time update, but might flicker
         axios.get('/food').then(res => {
             const items = res.data.items || [];
             const activeItems = items.filter(f => f.is_active); 
@@ -55,7 +55,7 @@ export default function Voting() {
             }
         })
         .catch(console.error)
-        .finally(() => setIsLoading(false)); // Turn off loading
+        .finally(() => setIsLoading(false));
 
         axios.get('/status').then(res => setStatus(res.data.closed));
     };
@@ -95,7 +95,10 @@ export default function Voting() {
     };
 
     const handleVote = async (id) => {
+        if (status) return; // Stop if closed
+        setIsSubmitting(true); // Disable button
         const state = orderState[id] || {};
+        
         try {
             await axios.post('/vote', { 
                 food_id: id,
@@ -103,14 +106,13 @@ export default function Voting() {
                 notes: state.notes || ''
             });
             
-            if (votedId) {
-                alert("Order updated successfully! ✅");
-            } else {
-                alert("Order placed successfully! 🚀");
-            }
-
             setVotedId(id);
-        } catch (e) { alert(e.response.data.message); }
+            alert(votedId ? "Order updated successfully! ✅" : "Order placed successfully! 🚀");
+        } catch (e) { 
+            alert(e.response?.data?.message || "Error processing vote"); 
+        } finally {
+            setIsSubmitting(false); // Re-enable
+        }
     };
 
     const handleChangePassword = async () => {
@@ -163,9 +165,9 @@ export default function Voting() {
                                             className="btn-vote" 
                                             style={{padding:'6px 12px', fontSize:'0.8rem', width:'auto'}}
                                             onClick={() => { setShowFavModal(false); handleVote(f.id); }}
-                                            disabled={status}
+                                            disabled={status || isSubmitting}
                                         >
-                                            Vote
+                                            {isSubmitting && votedId === f.id ? <span className="spinner"></span> : 'Vote'}
                                         </button>
                                     </div>
                                 ))}
@@ -189,12 +191,16 @@ export default function Voting() {
                 Welcome, <span style={{color:'var(--primary)', fontWeight:'bold'}}>{user.username}</span>!
             </p>
             
-            {status && <div className="message-box" style={{background:'#fff3cd', color:'#856404', marginBottom:'20px'}}>Voting is currently CLOSED 🔒</div>}
+            {status && <div className="message-box" style={{background:'#fff3cd', color:'#b91c1c', marginBottom:'20px'}}>Voting is currently CLOSED 🔒</div>}
 
             <div className="food-grid">
                 {food.map(f => {
                     const state = orderState[f.id] || { selected: [], notes: '' };
                     const isFav = favorites.includes(f.id);
+                    // Only show spinner on the specific card being voted on
+                    const cardLoading = isSubmitting && votedId === f.id; 
+                    // Or if submitting a new vote (votedId changes later, so check isSubmitting generally if we want to lock all)
+                    
                     return (
                         <div key={f.id} className={`food-card ${votedId === f.id ? 'voted' : ''}`}>
                             <button 
@@ -216,7 +222,7 @@ export default function Voting() {
                                                     type="checkbox" 
                                                     checked={state.selected.includes(opt)} 
                                                     onChange={() => toggleOption(f.id, opt)}
-                                                    disabled={status}
+                                                    disabled={status || isSubmitting}
                                                 />
                                                 <span>{opt}</span>
                                             </label>
@@ -230,16 +236,20 @@ export default function Voting() {
                                     placeholder="Notes..." 
                                     value={state.notes}
                                     onChange={e => handleNoteChange(f.id, e.target.value)}
-                                    disabled={status}
+                                    disabled={status || isSubmitting}
                                 />
 
                                 <button 
                                     className="btn-vote" 
-                                    disabled={status} 
+                                    disabled={status || isSubmitting} 
                                     onClick={() => handleVote(f.id)}
                                     style={{marginTop:'10px', background: votedId === f.id ? 'var(--success)' : ''}}
                                 >
-                                    {votedId === f.id ? 'Update Order ✅' : 'Order This'}
+                                    {isSubmitting ? (
+                                        <> <span className="spinner"></span> Processing... </>
+                                    ) : (
+                                        votedId === f.id ? 'Update Order ✅' : 'Order This'
+                                    )}
                                 </button>
                             </div>
                         </div>
