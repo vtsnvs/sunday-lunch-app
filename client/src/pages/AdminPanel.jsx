@@ -47,8 +47,8 @@ export default function AdminPanel() {
     // States
     const [showArchived, setShowArchived] = useState(false);
     const [shelfSearch, setShelfSearch] = useState(""); 
-    const [isSaving, setIsSaving] = useState(false); // Spinner for Food
-    const [isCreating, setIsCreating] = useState(false); // Spinner for User
+    const [isSaving, setIsSaving] = useState(false); 
+    const [isCreating, setIsCreating] = useState(false); 
     
     const fileInputRef = useRef(null);
 
@@ -67,21 +67,25 @@ export default function AdminPanel() {
     const activeFood = food.filter(f => f.is_active);
     const inactiveFood = food.filter(f => !f.is_active);
 
+    // CALCULATE UNVOTED USERS
+    const votedUsernames = orders.map(o => o.username);
+    const unvotedUsers = userList.filter(u => !votedUsernames.includes(u.username));
+
     useEffect(() => {
         fetchData();
         fetchOrders();
-        if(isSuperAdmin) fetchUsers();
+        fetchUsers(); // Always fetch users now to calculate unvoted list
 
         socket.on('update', (data) => {
             if (data.type === 'menu' || data.type === 'votes' || data.type === 'reset') {
                 fetchData();
                 fetchOrders();
             }
-            if (data.type === 'users' && isSuperAdmin) fetchUsers();
+            if (data.type === 'users') fetchUsers();
         });
         socket.on('status_change', (data) => setStatus(data.closed));
         return () => { socket.off('update'); socket.off('status_change'); };
-    }, [isSuperAdmin]);
+    }, []);
 
     const fetchData = () => {
         axios.get('/food').then(res => setFood(res.data?.items || [])).catch(console.error);
@@ -135,7 +139,7 @@ export default function AdminPanel() {
 
     const handleSaveFood = async () => {
         if (!newFood.trim()) return alert("Please enter a food name!");
-        setIsSaving(true); // START LOADING
+        setIsSaving(true); 
 
         const formData = new FormData();
         formData.append('name', newFood.trim());
@@ -156,7 +160,7 @@ export default function AdminPanel() {
         } catch (e) {
             alert("Error saving food item");
         } finally {
-            setIsSaving(false); // STOP LOADING
+            setIsSaving(false); 
         }
     };
 
@@ -170,7 +174,7 @@ export default function AdminPanel() {
 
     const handleCreateUser = async () => {
         if (!newUser.trim()) return alert("Please enter a username!");
-        setIsCreating(true); // START LOADING
+        setIsCreating(true); 
         try {
             await axios.post('/admin/users', { username: newUser.trim(), role: 'user' });
             alert(`User "${newUser}" created successfully! ✅`);
@@ -178,7 +182,7 @@ export default function AdminPanel() {
         } catch (e) {
             alert(e.response?.data?.message || "Failed to create user.");
         } finally {
-            setIsCreating(false); // STOP LOADING
+            setIsCreating(false); 
         }
     };
 
@@ -257,6 +261,7 @@ export default function AdminPanel() {
                     <table>
                         <thead>
                             <tr>
+                                <th style={{width:'50px'}}>#</th>
                                 <th>User</th>
                                 <th>Food</th>
                                 <th>Extras</th>
@@ -266,6 +271,7 @@ export default function AdminPanel() {
                         <tbody>
                             {orders.map((o, i) => (
                                 <tr key={i}>
+                                    <td style={{color:'#888', fontWeight:'bold'}}>{i + 1}</td>
                                     <td style={{fontWeight:'600'}}>{o.username}</td>
                                     <td>{o.food_name}</td>
                                     <td>
@@ -278,10 +284,24 @@ export default function AdminPanel() {
                                     <td style={{color:'#666', fontSize:'0.9rem'}}>{o.notes || '-'}</td>
                                 </tr>
                             ))}
-                            {orders.length === 0 && <tr><td colSpan="4" style={{textAlign:'center', color:'#888', padding:'20px'}}>No orders yet.</td></tr>}
+                            {orders.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', color:'#888', padding:'20px'}}>No orders yet.</td></tr>}
                         </tbody>
                     </table>
                 </div>
+
+                {/* UNVOTED USERS SECTION */}
+                {unvotedUsers.length > 0 && (
+                    <div style={{marginTop: '25px', padding: '15px', background: '#fff0f0', borderRadius: '12px', border: '1px solid #ffdcdc'}}>
+                        <h4 style={{marginBottom:'10px', color:'#c0392b'}}>👻 Missing Votes ({unvotedUsers.length})</h4>
+                        <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
+                            {unvotedUsers.map(u => (
+                                <span key={u.username} className="badge" style={{background:'#fff', border:'1px solid #e0e0e0', color:'#555'}}>
+                                    {u.username}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* FOOD MANAGEMENT */}
