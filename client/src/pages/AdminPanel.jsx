@@ -256,7 +256,13 @@ export default function AdminPanel() {
 
             {/* ORDER MANIFEST */}
             <div className="card">
-                <h2>📋 Order Manifest</h2>
+                <div className="flex-between" style={{marginBottom:'15px', alignItems:'center'}}>
+                    <h2 style={{margin:0, border:0}}>📋 Order Manifest</h2>
+                    <span className="badge badge-admin" style={{fontSize:'1rem', padding:'8px 15px', background:'var(--primary)', color:'white'}}>
+                        Total Orders: {orders.length}
+                    </span>
+                </div>
+                
                 <div className="table-wrapper">
                     <table>
                         <thead>
