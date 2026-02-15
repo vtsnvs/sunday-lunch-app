@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
-// Removed https requirement since self-ping is gone
 const { Server } = require("socket.io");
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -297,6 +296,32 @@ app.post('/api/vote', authenticate, async (req, res) => {
     } catch (e) { 
         console.error("Voting Error:", e);
         res.status(500).json({ message: "Failed to submit vote" }); 
+    }
+});
+
+// NEW: DELETE VOTE (Cancel Order)
+app.delete('/api/vote', authenticate, async (req, res) => {
+    try {
+        const user_id = req.user.id;
+        const status = await pool.query("SELECT order_closed FROM admin_status WHERE id=1");
+        if (status.rows[0].order_closed) return res.status(403).json({ message: "Voting Closed" });
+
+        const existing = await pool.query("SELECT food_id FROM vote_logs WHERE user_id=$1", [user_id]);
+        if (existing.rows.length > 0) {
+            const foodId = existing.rows[0].food_id;
+            // Decrement vote count
+            await pool.query("UPDATE food_items SET votes = votes - 1 WHERE id=$1", [foodId]);
+            // Remove log
+            await pool.query("DELETE FROM vote_logs WHERE user_id=$1", [user_id]);
+            
+            io.emit('update', { type: 'votes' });
+            res.json({ message: "Order Cancelled" });
+        } else {
+            res.status(400).json({ message: "No active order to cancel" });
+        }
+    } catch (e) {
+        console.error("Cancel Vote Error:", e);
+        res.status(500).json({ message: "Failed to cancel order" });
     }
 });
 

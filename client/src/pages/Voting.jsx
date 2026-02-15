@@ -115,6 +115,21 @@ export default function Voting() {
         }
     };
 
+    // NEW: Cancel Function
+    const handleCancel = async () => {
+        if (!confirm("Are you sure you want to cancel your order? 🗑️")) return;
+        setIsSubmitting(true);
+        try {
+            await axios.delete('/vote');
+            setVotedId(null);
+            alert("Order cancelled successfully! 🗑️");
+        } catch(e) {
+            alert(e.response?.data?.message || "Failed to cancel order");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const handleChangePassword = async () => {
         if (!newPass) return;
         try {
@@ -199,7 +214,6 @@ export default function Voting() {
                     const isFav = favorites.includes(f.id);
                     // Only show spinner on the specific card being voted on
                     const cardLoading = isSubmitting && votedId === f.id; 
-                    // Or if submitting a new vote (votedId changes later, so check isSubmitting generally if we want to lock all)
                     
                     return (
                         <div key={f.id} className={`food-card ${votedId === f.id ? 'voted' : ''}`}>
@@ -239,18 +253,31 @@ export default function Voting() {
                                     disabled={status || isSubmitting}
                                 />
 
-                                <button 
-                                    className="btn-vote" 
-                                    disabled={status || isSubmitting} 
-                                    onClick={() => handleVote(f.id)}
-                                    style={{marginTop:'10px', background: votedId === f.id ? 'var(--success)' : ''}}
-                                >
-                                    {isSubmitting ? (
-                                        <> <span className="spinner"></span> Processing... </>
-                                    ) : (
-                                        votedId === f.id ? 'Update Order ✅' : 'Order This'
+                                <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
+                                    <button 
+                                        className="btn-vote" 
+                                        disabled={status || isSubmitting} 
+                                        onClick={() => handleVote(f.id)}
+                                        style={{flex:1, background: votedId === f.id ? 'var(--success)' : ''}}
+                                    >
+                                        {isSubmitting && votedId === f.id ? (
+                                            <> <span className="spinner"></span> </>
+                                        ) : (
+                                            votedId === f.id ? 'Update' : 'Order This'
+                                        )}
+                                    </button>
+                                    
+                                    {votedId === f.id && (
+                                        <button 
+                                            className="btn-danger"
+                                            disabled={status || isSubmitting}
+                                            onClick={handleCancel}
+                                            style={{flex:1}}
+                                        >
+                                            Cancel ✕
+                                        </button>
                                     )}
-                                </button>
+                                </div>
                             </div>
                         </div>
                     );
